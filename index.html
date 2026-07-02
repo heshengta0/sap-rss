@@ -1,0 +1,2712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="referrer" content="no-referrer" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>AI RSS Reader Pro</title>
+<!-- 引入 FontAwesome -->
+<link rel="stylesheet" href="../../fontawesome/css/all.min.css">
+<!-- [Lib] 引入 markdown-it 核心库 -->
+<script src="../../libs/markdown-it.min.js"></script>
+<!-- [Lib] 引入 markdown-it-container 插件 (用于支持 ::: tip 语法) -->
+<script src="../../libs/markdown-it-container.min.js"></script>
+<style>
+/* ================== 基础样式 ================== */
+:root {
+  --bg-sidebar: #f9f9f9; --bg-list: #fff; --bg-content: #fff;
+  --border: #e0e0e0; --text-main: #333; --text-sub: #666;
+  --accent: #ff6b35; --hover: #f0f0f0; --header-h: 54px;
+  --ai-summary-bg: #f8fbff; --ai-summary-border: #dbeafe;
+  --ai-text-color: #1e3a8a;
+  /* Admonition Colors */
+  --admonition-tip-border: #42b983;
+  --admonition-tip-bg: #f3f5f7;
+  --admonition-warning-border: #e7c000;
+  --admonition-warning-bg: #fff7d0;
+  --admonition-danger-border: #c00;
+  --admonition-danger-bg: #ffe6e6;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+body { height: 100vh; display: flex; overflow: hidden; color: var(--text-main); background: #fff; }
+/* 布局 */
+.layout-col { height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
+#sidebar { width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border); flex-shrink: 0; z-index: 3; }
+#articleList { width: 350px; background: var(--bg-list); border-right: 1px solid var(--border); flex-shrink: 0; z-index: 2; }
+#contentView { flex: 1; background: var(--bg-content); position: relative; z-index: 1; scroll-behavior: smooth; }
+/* 顶部栏 */
+.header-bar {
+height: var(--header-h); padding: 0 15px; border-bottom: 1px solid var(--border);
+display: flex; align-items: center; justify-content: space-between;
+background: rgba(255,255,255,0.95); backdrop-filter: blur(5px);
+position: sticky; top: 0; z-index: 10; font-weight: 600; font-size: 15px; flex-shrink: 0; 
+}
+/* Tooltip 样式 (无 Title 属性) */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after {
+  content: attr(data-tooltip-text);
+  position: absolute;
+  bottom: -34px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.8); color: #fff;
+  padding: 5px 10px; border-radius: 4px; font-size: 12px;
+  white-space: nowrap; pointer-events: none; opacity: 0;
+  transition: opacity 0.2s; z-index: 1000; font-weight: normal;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+[data-tooltip]:hover::after { opacity: 1; }
+.bottom-tooltip[data-tooltip]::after { bottom: auto; top: -34px; }
+.btn-icon { background: none; border: none; cursor: pointer; color: var(--text-sub); font-size: 16px; padding: 8px; border-radius: 6px; transition: .2s; display: flex; align-items: center; justify-content: center;}
+.btn-icon:hover { color: var(--accent); background: rgba(0,0,0,0.05); }
+/* 操作栏按钮组 */
+.toolbar-group { display: flex; gap: 8px; align-items: center; }
+.btn-toolbar {
+  display: flex; align-items: center; gap: 6px;
+  background: #f0f0f0; border: 1px solid transparent;
+  padding: 6px 12px; border-radius: 20px;
+  font-size: 13px; color: #444; cursor: pointer; transition: all .2s;
+}
+.btn-toolbar:hover { background: #e5e5e5; color: #000; }
+.btn-toolbar.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-toolbar:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; filter: grayscale(1); }
+.btn-toolbar i { font-size: 14px; }
+/* 订阅列表项 */
+.feed-item {
+padding: 10px 12px; margin: 4px 10px; border-radius: 6px; cursor: pointer;
+display: flex; align-items: center; gap: 10px; font-size: 14px; position: relative;
+transition: background .2s;
+}
+.feed-item:hover { background: rgba(0,0,0,0.05); }
+.feed-item.active { background: #e6e6e6; font-weight: 600; }
+.feed-icon { width: 16px; height: 16px; border-radius: 3px; object-fit: cover; flex-shrink: 0; }
+.feed-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 20px; }
+.btn-delete {
+position: absolute; right: 5px; opacity: 0; color: #999; border:none;
+background:none; cursor:pointer; padding: 4px; transition: opacity .2s; z-index: 2;
+}
+.feed-item:hover .btn-delete { opacity: 1; }
+.btn-delete:hover { color: #ff4d4f; }
+.icon-locked { position: absolute; right: 8px; color: #ccc; font-size: 12px; opacity: 0.5; }
+/* 文章卡片 */
+.article-card { padding: 18px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .2s; }
+.article-card:hover { background: var(--hover); }
+.article-card.active { border-left: 4px solid var(--accent); background: var(--hover); padding-left: 16px; }
+.article-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; line-height: 1.4; color: #222; }
+.article-meta { font-size: 12px; color: var(--text-sub); display: flex; justify-content: space-between; }
+.article-img-preview { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-top: 8px; display: none; }
+.article-card.has-img .article-img-preview { display: block; }
+/* 文章详情 */
+.article-scroll-area { padding: 30px 40px; height: calc(100% - var(--header-h)); overflow-y: auto; }
+#articleHeader { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+#articleHeader h1 { font-size: 24px; margin-bottom: 10px; line-height: 1.4; color: #111; transition: color 0.3s; }
+#articleBody { font-size: 17px; line-height: 1.8; color: #333; overflow-wrap: break-word; }
+#articleBody img { max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; display: block; }
+#articleBody a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+#placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column; gap: 15px; }
+/* ================== 深度优化的 Markdown 渲染样式 ================== */
+
+#articleBody {
+  font-size: 17px;
+  line-height: 1.85;
+  color: #374151; /* 更柔和的深灰色 */
+  word-break: break-word;
+  letter-spacing: 0.01em;
+}
+
+/* --- 标题层级 (Headings) --- */
+#articleBody h1, #articleBody h2, #articleBody h3, 
+#articleBody h4, #articleBody h5, #articleBody h6 {
+  color: #111827;
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+#articleBody h1 { font-size: 1.8em; border-bottom: 2px solid #f3f4f6; padding-bottom: 0.3em; }
+#articleBody h2 { font-size: 1.5em; border-bottom: 1px solid #f3f4f6; padding-bottom: 0.3em; }
+#articleBody h3 { font-size: 1.25em; }
+#articleBody h4 { font-size: 1.1em; }
+
+/* --- 段落与间距 --- */
+#articleBody p {
+  margin-bottom: 1.2em;
+}
+
+/* --- 引用 (Blockquotes) --- */
+#articleBody blockquote {
+  margin: 1.5em 0;
+  padding: 0.8em 1.2em;
+  color: #4b5563;
+  background-color: #f9fafb;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  font-style: italic;
+}
+#articleBody blockquote p { margin-bottom: 0; }
+
+/* --- 列表 (Lists) --- */
+#articleBody ul, #articleBody ol {
+  margin-bottom: 1.2em;
+  padding-left: 1.5em;
+}
+#articleBody li {
+  margin-bottom: 0.5em;
+}
+#articleBody li > ul, #articleBody li > ol {
+  margin-top: 0.5em;
+  margin-bottom: 0;
+}
+
+/* --- 代码块 (Code) --- */
+/* 行内代码 */
+#articleBody code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  background-color: rgba(255, 107, 53, 0.08);
+  color: var(--accent);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* 块状代码 */
+#articleBody pre {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1.2em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1.5em;
+  line-height: 1.5;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+}
+#articleBody pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+/* --- 表格 (Tables) - 现代简约风 --- */
+#articleBody table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 1.5em;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+#articleBody th {
+  background-color: #f8fafc;
+  font-weight: 600;
+  text-align: left;
+  color: #475569;
+}
+#articleBody th, #articleBody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.95em;
+}
+#articleBody tr:last-child td {
+  border-bottom: none;
+}
+#articleBody tr:hover td {
+  background-color: #fdfaff; /* 悬停效果 */
+}
+
+/* --- 分割线 (Horizontal Rule) --- */
+#articleBody hr {
+  height: 2px;
+  background-color: #f3f4f6;
+  border: none;
+  margin: 2em 0;
+  position: relative;
+}
+#articleBody hr::after {
+  content: "✦";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 0 10px;
+  color: #d1d5db;
+  font-size: 14px;
+}
+
+/* --- 图片处理 (Images) --- */
+#articleBody img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1.5em auto;
+  display: block;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  transition: transform 0.3s;
+}
+#articleBody img:hover {
+  transform: scale(1.01);
+}
+
+/* --- 链接样式 --- */
+#articleBody a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1.5px solid rgba(255, 107, 53, 0.2);
+  transition: all 0.2s;
+}
+#articleBody a:hover {
+  background-color: rgba(255, 107, 53, 0.05);
+  border-bottom-color: var(--accent);
+}
+
+/* --- [修正] 警告/提示框渲染增强 (Admonitions) --- */
+.admonition {
+  border-left-width: 6px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.admonition-title {
+  font-size: 0.85rem !important;
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+}
+.admonition.tip::before { content: "💡"; float: left; margin-right: 8px; }
+.admonition.warning::before { content: "⚠️"; float: left; margin-right: 8px; }
+.admonition.danger::before { content: "🚫"; float: left; margin-right: 8px; }
+
+/* --- AI 总结区域的 Markdown 微调 --- */
+#aiSummaryContent {
+  font-size: 14.5px;
+  color: #1e3a8a;
+}
+#aiSummaryContent ul {
+  list-style: none;
+  padding-left: 5px;
+}
+#aiSummaryContent li {
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 8px;
+}
+#aiSummaryContent li::before {
+  content: "•";
+  color: var(--accent);
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+}
+/* AI 总结区域 */
+#aiSummarySection {
+  background: var(--ai-summary-bg);
+  border: 1px solid var(--ai-summary-border);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 25px;
+  display: none;
+  font-size: 15px;
+  color: var(--ai-text-color);
+  line-height: 1.6;
+}
+#aiSummarySection .summary-header {
+  font-weight: bold; margin-bottom: 10px; font-size: 14px; 
+  display: flex; gap: 8px; align-items: center; color: var(--accent);
+}
+#aiSummaryContent ul, #aiSummaryContent ol { margin-left: 20px; margin-bottom: 10px; }
+#aiSummaryContent p { margin-bottom: 10px; }
+#aiSummaryContent strong { color: #000; }
+/* 移动端适配 */
+@media (max-width: 1280px) {
+body { position: relative; }
+.layout-col { position: absolute; inset: 0; width: 100%; background: #fff; transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); transform: translateX(100%); }
+body[data-view="sidebar"] #sidebar { transform: translateX(0); z-index: 30; }
+body[data-view="list"] #articleList { transform: translateX(0); z-index: 40; }
+body[data-view="content"] #contentView { transform: translateX(0); z-index: 50; }
+#sidebar, #articleList, #contentView { width: 100%; border: none; }
+.article-scroll-area { padding: 20px; }
+.btn-delete { opacity: 1; }
+.mobile-hide { display: none; }
+.mobile-show { display: inline-block; }
+.toolbar-group { gap: 5px; }
+.btn-toolbar { padding: 6px 10px; font-size: 12px; }
+.btn-toolbar span { display: none; } 
+}
+@media (min-width: 1280px) { .mobile-show { display: none; } }
+/* 模态框通用 */
+.modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.modal.active { display: flex; }
+.modal-box { background: #fff; width: 90%; max-width: 420px; padding: 24px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 90vh; display: flex; flex-direction: column; }
+.modal-header { font-weight: bold; margin-bottom: 20px; display: flex; justify-content: space-between; font-size: 18px; flex-shrink: 0; }
+.form-group { margin-bottom: 18px; }
+.form-group label { display: block; margin-bottom: 6px; font-size: 13px; color: #666; }
+.form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; outline: none; background: #fafafa; }
+/* 修复 Select 箭头位置 */
+.form-group select {
+  width: 100%;
+  padding: 10px 30px 10px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+  background-color: #fafafa;
+  cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23333%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px auto;
+}
+.form-group input:focus { border-color: var(--accent); background: #fff; }
+.btn { padding: 10px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-ghost { background: #eee; color: #333; }
+.tag-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tag-btn { font-size: 12px; padding: 4px 8px; background: #eee; border-radius: 4px; cursor: pointer; color: #555; }
+.tag-btn:hover { background: #e0e0e0; color: #000; }
+/* 探索器模态框特有样式 */
+.explorer-container { display: flex; border: 1px solid #eee; height: 400px; border-radius: 6px; overflow: hidden; }
+.explorer-side { width: 35%; border-right: 1px solid #eee; background: #f9f9f9; overflow-y: auto; }
+.explorer-main { flex: 1; background: #fff; overflow-y: auto; position: relative; }
+.ns-item { padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f0f0f0; transition: .2s; }
+.ns-item:hover { background: #eee; }
+.ns-item.active { background: #e6e6e6; color: var(--accent); font-weight: bold; border-left: 3px solid var(--accent); }
+.ns-item.special-item { background: #fff8f0; color: #d35400; font-weight: 600; border-bottom: 1px dashed #e0e0e0; }
+.ns-item.special-item:hover { background: #ffe0d0; }
+.ns-item.special-item.active { background: #ffebd9; border-left-color: #d35400; }
+/* 路由列表与详情样式 */
+.route-item { 
+  padding: 10px 12px; 
+  cursor: pointer; 
+  font-size: 13px; 
+  border-bottom: 1px solid #f0f0f0; 
+  transition: .2s; 
+  display: flex; 
+  flex-direction: column;
+}
+.route-item:hover { background: #f9f9f9; }
+.route-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+.route-title { font-weight: 600; color: #333; }
+.route-path-preview { color: #888; font-size: 12px; margin-top: 4px; font-family: monospace; }
+.route-details { 
+  display: none; 
+  margin-top: 10px; 
+  padding-top: 10px; 
+  border-top: 1px dashed #eee; 
+  font-size: 12px; 
+  color: #555; 
+  cursor: default; 
+}
+.route-item.expanded { background: #f0f8ff; border-left: 3px solid var(--accent); }
+.route-item.expanded .route-details { display: block; }
+.featured-group-title {
+  padding: 10px 12px;
+  background: #f1f1f1;
+  font-weight: bold;
+  font-size: 12px;
+  color: #666;
+  border-bottom: 1px solid #e0e0e0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+/* Markdown 渲染样式 */
+.md-content { font-size: 13px; line-height: 1.5; color: #444; margin-bottom: 10px; }
+.md-content table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; background: #fff; }
+.md-content th, .md-content td { border: 1px solid #e0e0e0; padding: 6px 10px; }
+.md-content th { background: #f9f9f9; font-weight: 600; text-align: left; }
+.md-content a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+.md-content code { background: #f0f0f0; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 12px; color: #d63384; }
+.md-content p { margin-bottom: 8px; }
+/* [New] Admonition (::: tip) 样式 */
+.admonition { margin: 10px 0; padding: 12px 16px; border-left: 4px solid #ccc; background-color: #fafafa; border-radius: 4px; }
+.admonition .admonition-title { font-weight: bold; margin-bottom: 6px; display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+/* Tip */
+.admonition.tip { border-color: var(--admonition-tip-border); background-color: var(--admonition-tip-bg); }
+.admonition.tip .admonition-title { color: #2c3e50; }
+/* Warning */
+.admonition.warning { border-color: var(--admonition-warning-border); background-color: var(--admonition-warning-bg); }
+.admonition.warning .admonition-title { color: #6b5900; }
+/* Danger */
+.admonition.danger { border-color: var(--admonition-danger-border); background-color: var(--admonition-danger-bg); }
+.admonition.danger .admonition-title { color: #900; }
+/* 参数表格样式 */
+.param-table { width: 100%; border-collapse: collapse; margin: 8px 0; background: #fff; border: 1px solid #eee; }
+.param-table th, .param-table td { border: 1px solid #eee; padding: 6px; text-align: left; vertical-align: top; }
+.param-table th { background: #fafafa; font-weight: 600; width: 30%; color: #444; }
+.param-badge { display: inline-block; background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 11px; margin-right: 5px; }
+.use-btn { 
+  background: var(--accent); color: #fff; border: none; 
+  padding: 6px 12px; border-radius: 4px; cursor: pointer; 
+  font-size: 12px; margin-top: 8px; float: right; 
+}
+.use-btn:hover { opacity: 0.9; }
+/* 悬浮工具与 Loading */
+#selectionToolbar { position: fixed; display: none; z-index: 2000; background: #222; color: #fff; border-radius: 6px; padding: 6px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+#selectionToolbar button { background: none; border: none; color: #fff; padding: 4px 10px; cursor: pointer; display: flex; gap: 6px; align-items: center; font-size: 13px; }
+#translatePopup { position: fixed; display: none; z-index: 2001; background: #fff; width: 300px; max-height: 300px; overflow-y: auto; padding: 15px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); font-size: 14px; border: 1px solid #eee; }
+.spinner { width: 24px; height: 24px; border: 3px solid #eee; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.cache-badge { font-size: 12px; color: #aaa; margin-left: 5px; font-weight: normal; display: inline-flex; align-items: center; gap: 4px; }
+/* ================== 新增：翻译样式 ================== */
+[data-translating="true"] {
+  position: relative;
+  /* 关键修复：布局隔离，告诉浏览器该元素的布局变化不会影响外部 */
+  contain: layout style paint; 
+  border-left: 3px solid var(--accent); 
+  padding-left: 12px; 
+  margin-left: -15px;
+  transition: all 0.3s ease;
+  /* 优化文本渲染速度 */
+  text-rendering: optimizeSpeed; 
+}
+/* 翻译完成后移除特殊样式 */
+[data-translated="true"] {
+  border-left: 3px solid transparent;
+  padding-left: 12px;
+  margin-left: -15px;
+  /* 翻译完成后移除 contain 以恢复正常流交互（如复制选区等），也可以保留 */
+  contain: none; 
+}
+/* 翻译过程中的微动画 */
+@keyframes translate-pulse {
+  0% { border-left-color: rgba(255, 107, 53, 0.4); }
+  50% { border-left-color: rgba(255, 107, 53, 1); }
+  100% { border-left-color: rgba(255, 107, 53, 0.4); }
+}
+[data-translating="true"] {
+  animation: translate-pulse 1.5s infinite;
+}
+/* 淡入效果 */
+.trans-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* ================== [新增] 视图切换下拉菜单样式 ================== */
+.dropdown-menu {
+  display: none; position: absolute; top: 100%; left: 0;
+  background: #fff; border: 1px solid #eee; border-radius: 6px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 5px; z-index: 100;
+  min-width: 140px; animation: fadeIn 0.2s;
+}
+.dropdown-menu.show { display: block; }
+.dropdown-item {
+  padding: 8px 12px; font-size: 13px; cursor: pointer;
+  border-radius: 4px; display: flex; align-items: center; gap: 8px; color: #555;
+}
+.dropdown-item:hover { background: #f5f5f5; color: #000; }
+.dropdown-item.active { background: #e6f7ff; color: var(--accent); }
+.dropdown-item i { width: 16px; text-align: center; }
+
+/* ================== [新增] 文章视图模式样式 ================== */
+
+/* --- 通用重置 --- */
+#articleContent {
+  transition: max-width 0.3s ease;
+  margin: 0 auto;
+}
+
+/* --- 1. 博客模式 (Blog View) --- */
+/* 专注于排版、阅读体验，类似 Medium/知乎专栏 */
+#articleContent.view-blog {
+  max-width: 720px; /* 限制宽度以提升阅读体验 */
+}
+#articleContent.view-blog #articleHeader h1 {
+  font-family: "Georgia", "Source Han Serif CN", "Songti SC", serif; /* 衬线体标题 */
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+}
+#articleContent.view-blog #articleBody {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 18px; /* 更大的字号 */
+  line-height: 1.8; /* 更宽松的行高 */
+  color: #2c3e50;
+}
+#articleContent.view-blog #articleBody p { margin-bottom: 24px; }
+#articleContent.view-blog #articleBody img,
+#articleContent.view-blog #articleBody video,
+#articleContent.view-blog #articleBody iframe {
+  max-width: 100%; height: auto; display: block; margin: 20px auto;
+  border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+#articleContent.view-blog blockquote {
+  border-left: 4px solid var(--accent);
+  padding-left: 16px; margin: 20px 0; color: #666; font-style: italic; background: #fafafa; padding: 10px 16px;
+}
+
+/* --- 2. 画廊模式 (Gallery View) --- */
+/* 专注于图片展示，瀑布流布局 */
+#articleContent.view-gallery {
+  max-width: 100%; /* 全宽 */
+  padding: 0 10px;
+}
+#articleContent.view-gallery #articleHeader {
+  text-align: center; max-width: 800px; margin: 0 auto 30px auto;
+}
+#articleContent.view-gallery #aiSummarySection {
+  max-width: 800px; margin: 0 auto 20px auto;
+}
+/* 使用 CSS Columns 实现瀑布流，因为它能很好地处理不同高度的图片 */
+#articleContent.view-gallery #articleBody {
+  column-count: 3; /* 桌面端 3 列 */
+  column-gap: 15px;
+  font-size: 14px;
+}
+/* 每一块内容（段落或图片容器）避免在中间断开 */
+#articleContent.view-gallery #articleBody > * {
+  break-inside: avoid;
+  margin-bottom: 15px;
+  background: #fff;
+  border-radius: 8px;
+  /* 可选：给每个块加一点卡片效果 */
+  /* border: 1px solid #f0f0f0; padding: 10px; */ 
+}
+#articleContent.view-gallery #articleBody img,
+#articleContent.view-gallery #articleBody video,
+#articleContent.view-gallery #articleBody iframe {
+  width: 100%; height: auto;
+  border-radius: 6px;
+  display: block;
+}
+/* 在画廊模式下，弱化纯文本段落，或者让它像图片说明 */
+#articleContent.view-gallery #articleBody p {
+  color: #666; line-height: 1.5; margin-top: 5px;
+}
+
+/* 移动端适配画廊模式 */
+@media (max-width: 1280px) {
+  #articleContent.view-gallery #articleBody { column-count: 2; }
+}
+@media (max-width: 480px) {
+  #articleContent.view-gallery #articleBody { column-count: 1; }
+}
+/* 文件上传按钮的 Hover 效果 */
+label.btn-ghost:hover {
+  background-color: #f0f0f0;
+  border-color: var(--accent) !important;
+  color: var(--accent);
+  cursor: pointer;
+}
+/* ================== [新增] 侧边栏搜索框样式 ================== */
+.sidebar-search {
+  padding: 10px 12px;
+  background: #f9f9f9; /* 与侧边栏背景一致 */
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: sticky; /* 关键：吸顶效果 */
+  top: var(--header-h); /* 紧贴 Header 下方 */
+  z-index: 5;
+}
+.sidebar-search i {
+  color: #999;
+  font-size: 13px;
+}
+.sidebar-search input {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+}
+.sidebar-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.1);
+}
+/* ================== [新增] RSS 站点卡片样式 ================== */
+.rss-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); /* 自适应网格 */
+  gap: 15px;
+  overflow-y: auto;
+  padding: 2px; /* 防止阴影被切 */
+  flex: 1; /* 占满模态框剩余高度 */
+  align-content: start;       /* 让卡片从顶部开始排列，不要分散拉伸 */
+  grid-auto-rows: max-content; /* 让每一行的高度根据内容自适应，不要强制撑高 */
+}
+
+.rss-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s;
+  cursor: default;
+}
+
+.rss-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+}
+
+.rss-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.rss-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rss-card-tag {
+  font-size: 10px;
+  background: #f0f0f0;
+  color: #666;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto; /* 推到右边 */
+}
+
+.rss-card-desc {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  flex: 1; /* 让描述占据剩余空间，保证按钮对齐 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3; /* 最多显示3行 */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rss-card-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.2s;
+}
+
+.rss-card-btn:hover {
+  opacity: 0.9;
+}
+/* 杂志卡片样式 */
+.mag-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 15px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px;
+  transition: all .2s; cursor: pointer;
+}
+.mag-item:hover { border-color: var(--accent); background: #fdfaff; box-shadow: 0 4px 10px rgba(142, 68, 173, 0.1); }
+.mag-info h4 { font-size: 16px; margin-bottom: 4px; color: #333; }
+.mag-info p { font-size: 12px; color: #888; }
+.mag-actions { display: flex; gap: 8px; }
+
+/* 杂志阅读视图特定样式 */
+#articleContent.view-magazine { max-width: 800px; margin: 0 auto; }
+.magazine-cover {
+  text-align: center; padding: 40px 0; border-bottom: 2px solid #333; margin-bottom: 30px;
+  background: radial-gradient(circle at center, #fdfaff 0%, #fff 100%);
+}
+.magazine-title { font-family: "Georgia", serif; font-size: 42px; font-weight: bold; color: #2c3e50; letter-spacing: -1px; }
+.magazine-date { font-size: 14px; color: #888; text-transform: uppercase; letter-spacing: 2px; margin-top: 10px; }
+.magazine-toc { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 40px; border: 1px solid #e9ecef; }
+.magazine-toc h3 { font-size: 14px; text-transform: uppercase; color: #888; margin-bottom: 15px; letter-spacing: 1px; }
+.toc-link { display: block; padding: 8px 0; border-bottom: 1px dashed #eee; color: #333; text-decoration: none; font-size: 15px; transition: .2s; }
+.toc-link:hover { padding-left: 10px; color: var(--accent); }
+.mag-article { margin-bottom: 50px; padding-bottom: 30px; border-bottom: 1px solid #eee; }
+.mag-article-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #000; }
+.mag-article-meta { font-size: 12px; color: #999; margin-bottom: 15px; }
+.mag-article-summary { font-size: 16px; line-height: 1.8; color: #444; background: #fff; }
+.mag-article-summary strong { color: var(--accent); }
+
+/* 朗读按钮激活（播放中）状态 */
+.btn-icon.reading {
+  color: #ff4d4f; /* 红色表示停止 */
+  animation: pulse-red 2s infinite;
+}
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 77, 79, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0); }
+}
+/* ================== [优化] 杂志生成配置界面样式 ================== */
+/* 容器间距优化 */
+#magazineConfigModal .modal-box {
+  max-width: 550px; /* 稍微调宽一点 */
+  padding: 28px;
+}
+
+/* 表单组布局 */
+.mag-config-group {
+  margin-bottom: 22px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+.mag-config-group:last-of-type { border-bottom: none; }
+
+.mag-config-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 12px;
+}
+.mag-config-label i { color: var(--accent); font-size: 16px; }
+
+/* 数字输入框美化 */
+.mag-input-number {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mag-input-number input {
+  width: 80px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+/* 订阅源网格容器 */
+.source-select-container {
+  max-height: 280px;
+  overflow-y: auto;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 强制两列布局，更整齐 */
+  gap: 8px;
+  overflow: hidden;
+}
+/* 滚动条美化 */
+.source-select-container::-webkit-scrollbar { width: 5px; }
+.source-select-container::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+
+/* 单个选项卡片 */
+.source-check-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.source-check-item:hover {
+  border-color: var(--accent);
+  background: #fff8f5;
+  transform: translateY(-1px);
+}
+/* 选中状态的模拟 (通过 JS 配合或简单的 CSS 选择器) */
+.source-check-item input:checked + span + span { font-weight: 600; color: #000; }
+
+.source-check-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.source-check-item img {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.source-check-item .source-name {
+  font-size: 13px;
+  color: #555;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* 工具栏样式 */
+.mag-config-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.mag-sel-info { font-size: 12px; color: #888; }
+.mag-sel-info b { color: var(--accent); font-size: 14px; }
+.mag-sel-actions { display: flex; gap: 12px; }
+.mag-sel-actions a {
+  font-size: 12px;
+  color: #666;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #eee;
+  transition: .2s;
+}
+.mag-sel-actions a:hover { background: var(--accent); color: #fff; }
+
+/* 移动端适配 */
+@media (max-width: 480px) {
+  .source-select-container { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body data-view="sidebar">
+<!-- 1. 订阅列表 -->
+<div id="sidebar" class="layout-col">
+  <div class="header-bar">
+    <span data-i18n="sidebar.title">我的订阅</span>
+    <!-- Flex 布局，使按钮横向排列 -->
+    <div style="display: flex; align-items: center; gap: 2px;">
+      <button class="btn-icon" onclick="openModal('magazineListModal')" data-tooltip="sidebar.magazine">
+        <i class="fa-solid fa-book-open" style="color: var(--accent);"></i>
+      </button>
+      <button class="btn-icon" onclick="openModal('rssSiteModal')" data-tooltip="sidebar.site_explore">
+        <i class="fa-solid fa-globe"></i>
+      </button>
+      <button class="btn-icon" onclick="openModal('addFeedModal')" data-tooltip="sidebar.add"><i class="fa-solid fa-plus"></i></button>
+      <button class="btn-icon" onclick="openModal('settingsModal')" data-tooltip="sidebar.settings"><i class="fa-solid fa-cog"></i></button>
+    </div>
+  </div>
+  <div class="sidebar-search">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <input type="text" id="feedSearchInput" oninput="filterFeeds(this.value)">
+  </div>
+  <div id="feedList"></div>
+  <div id="loadingTips" style="text-align:center; padding:20px; color:#999; font-size:13px; display:none;" data-i18n="sidebar.loading">正在加载订阅源...</div>
+</div>
+<!-- 2. 文章列表 -->
+<div id="articleList" class="layout-col">
+  <div class="header-bar">
+    <div style="display:flex; align-items:center; gap:5px; overflow:hidden;">
+      <button class="btn-icon mobile-show" onclick="navTo('sidebar')"><i class="fa-solid fa-chevron-left"></i></button>
+      <span id="currentFeedTitle" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" data-i18n="list.title_default">文章列表</span>
+      <span id="cacheIndicator" class="cache-badge"></span>
+    </div>
+    <button class="btn-icon" onclick="refreshFeed()" data-tooltip="list.refresh"><i class="fa-solid fa-rotate-right"></i></button>
+  </div>
+  <div id="listContainer" style="padding: 20px; text-align: center; color: #888;" data-i18n="list.select_tip">
+    请选择左侧订阅源
+  </div>
+</div>
+<!-- 3. 文章详情 -->
+<div id="contentView" class="layout-col">
+  <div class="header-bar">
+    <button class="btn-icon mobile-show" onclick="navTo('list')"><i class="fa-solid fa-chevron-left"></i></button>
+    
+    <!-- [新增] 视图切换组件 -->
+    <div class="view-switcher-group" style="margin-left: 10px; position: relative;">
+      <button class="btn-icon" onclick="toggleViewMenu()" id="btnViewSwitch" data-tooltip="toolbar.view_mode.label">
+        <i class="fa-solid fa-newspaper"></i>
+      </button>
+      <!-- 下拉菜单 -->
+      <div id="viewMenu" class="dropdown-menu">
+        <div class="dropdown-item active" onclick="changeViewMode('blog')" id="viewOptionBlog">
+          <i class="fa-solid fa-align-left"></i> <span data-i18n="toolbar.view_mode.blog">博客模式</span>
+        </div>
+        <div class="dropdown-item" onclick="changeViewMode('gallery')" id="viewOptionGallery">
+          <i class="fa-solid fa-images"></i> <span data-i18n="toolbar.view_mode.gallery">画廊模式</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1"></div>
+    
+    <!-- AI 功能区 (保持不变) -->
+    <button class="btn-icon" id="btnSummarize" onclick="actionSummarize(this)" data-tooltip="toolbar.tip_summarize">
+      <i class="fa-solid fa-wand-magic-sparkles"></i>
+    </button>
+    <button class="btn-icon" id="btnTranslateFull" onclick="actionTranslateFull(this)" data-tooltip="toolbar.tip_translate">
+      <i class="fa-solid fa-language"></i>
+    </button>
+    <button class="btn-icon" id="btnAskAI" onclick="actionAskAIFull(this)" data-tooltip="toolbar.tip_ask">
+      <i class="fa-solid fa-robot"></i>
+    </button>
+    <button class="btn-icon" id="btnReadFull" onclick="actionReadFull(this)" data-tooltip="toolbar.tip_read">
+      <i class="fa-solid fa-headphones"></i>
+    </button>
+    <button class="btn-icon mobile-hide" onclick="toggleFullScreen()" data-tooltip="content.fullscreen"><i class="fa-solid fa-expand"></i></button>
+  </div>
+
+  <div class="article-scroll-area" id="articleScrollArea">
+    <div id="placeholder">
+      <i class="fa-solid fa-book-open" style="font-size:48px;opacity:0.3"></i>
+      <div data-i18n="content.placeholder_text">选择文章开始阅读</div>
+    </div>
+    
+    <!-- 增加一个包裹层 content-wrapper 用于控制宽窄 -->
+    <div id="articleContent" class="view-blog" style="display:none">
+      <div id="articleHeader">
+        <h1 id="artTitle"></h1>
+        <div class="article-meta">
+          <span id="artDate"></span> · 
+          <a id="artLink" target="_blank"><span data-i18n="content.read_original">阅读原文</span> <i class="fa-solid fa-external-link-alt"></i></a>
+        </div>
+      </div>
+      <!-- AI 总结展示区 -->
+      <div id="aiSummarySection">
+        <div class="summary-header"><i class="fa-solid fa-wand-magic-sparkles"></i> <span data-i18n="content.summary_title">AI 智能总结</span></div>
+        <div id="aiSummaryContent"></div>
+      </div>
+      <!-- 文章正文 -->
+      <div id="articleBody"></div>
+    </div>
+  </div>
+</div>
+<!-- 悬浮工具 -->
+<div id="selectionToolbar">
+  <button onclick="actionTranslateSelection()"><i class="fa-solid fa-language"></i> <span data-i18n="toolbar.translate">翻译</span></button>
+  <div style="width:1px;background:#555;height:14px;margin:0 2px"></div>
+  <button onclick="actionAskAI()"><i class="fa-solid fa-robot"></i> <span data-i18n="toolbar.ask_ai">问 AI</span></button>
+  <div style="width:1px;background:#555;height:14px;margin:0 2px"></div>
+  <button onclick="actionReadSelection()"><i class="fa-solid fa-volume-high"></i> <span data-i18n="toolbar.read_selection">朗读</span></button>
+</div>
+<div id="translatePopup">
+  <div style="display:flex;justify-content:space-between;margin-bottom:8px;color:#888;font-size:12px">
+    <span data-i18n="toolbar.translate_result">翻译结果</span><span onclick="this.parentElement.parentElement.style.display='none'" style="cursor:pointer">&times;</span>
+  </div>
+  <div id="translateResult"></div>
+</div>
+<!-- 添加订阅 Modal -->
+<div id="addFeedModal" class="modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span data-i18n="modals.add_title">添加订阅</span> 
+      <span onclick="closeModal('addFeedModal')" style="cursor:pointer">&times;</span>
+    </div>
+    
+    <!-- 原有的手动输入部分 -->
+    <div class="form-group">
+      <label data-i18n="modals.url_label">URL / 路由</label>
+      <input type="text" id="feedInput" placeholder="https://example.com/feed">
+    </div>
+    <div class="form-group">
+      <label data-i18n="modals.name_label">订阅名称 (可选)</label>
+      <input type="text" id="feedNameInput" placeholder="留空则自动生成">
+    </div>
+
+    <!-- [新增] OPML 导入区域 -->
+    <div style="margin: 20px 0; border-top: 1px dashed #eee; padding-top: 20px;">
+      <div style="font-size: 12px; color: #999; margin-bottom: 10px; text-align: center; text-transform: uppercase;" data-i18n="modals.opml_tip">
+        或者是... 从文件导入
+      </div>
+      <label class="btn btn-ghost" style="display:block; text-align:center; width:100%; border: 1px dashed #ccc; padding: 12px;">
+        <i class="fa-solid fa-file-import"></i> <span data-i18n="modals.opml_label">导入 OPML 文件</span>
+        <!-- 隐藏的文件输入框，通过 onchange 触发 -->
+        <input type="file" style="display:none" onchange="handleOpmlImport(this)">
+      </label>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-ghost" onclick="closeModal('addFeedModal')" data-i18n="modals.btn_cancel">取消</button>
+      <button class="btn btn-primary" onclick="addFeed()" data-i18n="modals.btn_confirm">确认添加</button>
+    </div>
+  </div>
+</div>
+<!-- [新增] RSS 站点发现 Modal -->
+<div id="rssSiteModal" class="modal">
+  <div class="modal-box" style="max-width: 700px; height: 80vh;">
+    <div class="modal-header">
+      <span data-i18n="modals.site_explore_title">精选 RSS 站点</span> 
+      <span onclick="closeModal('rssSiteModal')" style="cursor:pointer">&times;</span>
+    </div>
+    
+    <!-- 搜索框 -->
+    <div style="margin-bottom: 15px;">
+      <div class="sidebar-search" style="border:1px solid #eee; border-radius:6px; padding:8px; position:static;">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="rssSiteSearch" placeholder="Search..." oninput="filterRssSites()" style="border:none; width:100%; outline:none;">
+      </div>
+    </div>
+
+    <!-- 卡片容器 -->
+    <div id="rssSiteList" class="rss-card-grid">
+      <div style="text-align:center; padding:50px; color:#999">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 设置 Modal -->
+<div id="settingsModal" class="modal">
+  <!-- 注意：给 modal-box 增加了 style="overflow: hidden" 以防止外层滚动 -->
+  <div class="modal-box" style="overflow: hidden; display: flex; flex-direction: column;">
+    
+    <!-- 1. 头部 (固定不动) -->
+    <div class="modal-header" style="flex-shrink: 0;">
+      <span data-i18n="modals.settings_title">全局设置</span> 
+      <span onclick="closeModal('settingsModal')" style="cursor:pointer">&times;</span>
+    </div>
+
+    <!-- 2. 中间滚动区域 (所有设置项放这里) -->
+    <!-- flex: 1 让它占据剩余空间，overflow-y: auto 让它超高时滚动 -->
+    <div style="flex: 1; overflow-y: auto; padding-right: 5px; margin-bottom: 15px;">
+      
+      <div class="form-group">
+        <label data-i18n="modals.lang_label">界面语言 / Interface Language</label>
+        <select id="langSelect" onchange="changeLanguage(this.value)">
+          <option value="zh">简体中文</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label data-i18n="modals.target_lang_label">AI 翻译目标语言 / Target Language</label>
+        <select id="targetLangSelect">
+          <option value="Simplified Chinese">简体中文</option>
+          <option value="Traditional Chinese">繁体中文</option>
+          <option value="English">English</option>
+          <option value="Japanese">Japanese</option>
+          <option value="Korean">Korean</option>
+          <option value="French">French</option>
+          <option value="German">German</option>
+          <option value="Spanish">Spanish</option>
+          <option value="Russian">Russian</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label data-i18n="modals.cache_label">缓存有效期 (分钟)</label>
+        <input type="number" id="cacheDuration" min="1" value="30">
+        <div style="font-size:12px;color:#999;margin-top:5px" data-i18n="modals.cache_desc">
+          间隔内再次点击不会消耗流量，直接加载本地数据。<br>点击"刷新"按钮可强制更新。
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label data-i18n="modals.magazine_hours_label">AI 杂志收录范围 (小时)</label>
+        <input type="number" id="magazineHours" min="1" value="24">
+      </div>
+    </div> <!-- 中间滚动区域结束 -->
+
+    <!-- 3. 底部按钮 (固定不动) -->
+    <div style="flex-shrink: 0; border-top: 1px solid #eee; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+      
+      <!-- 左侧：危险操作 (始终可见) -->
+      <button class="btn btn-ghost" style="padding-left: 25px; padding-right: 25px;" onclick="clearCache()" title="Clear Cache">
+        <span data-i18n="modals.settings_clear_cache" style="margin-left:4px;">清理缓存</span>
+      </button>
+
+      <!-- 右侧：保存操作 -->
+      <button class="btn btn-primary" style="padding-left: 25px; padding-right: 25px;" onclick="saveSettings()" data-i18n="modals.btn_save">保存配置</button>
+      
+    </div>
+
+  </div>
+</div>
+<!-- 杂志列表 Modal -->
+<div id="magazineListModal" class="modal">
+  <div class="modal-box" style="height: 70vh;">
+    <div class="modal-header">
+      <span data-i18n="modals.magazine_title">我的 AI 杂志</span> 
+      <span onclick="closeModal('magazineListModal')" style="cursor:pointer">&times;</span>
+    </div>
+    <div id="magazineContainer" style="flex:1; overflow-y:auto; padding: 5px;">
+      <!-- 列表将渲染在这里 -->
+    </div>
+    <div style="margin-top:15px; text-align:center;">
+      <button class="btn btn-primary" style="width:100%; background: var(--accent);" onclick="openMagConfig()">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> <span data-i18n="modals.btn_create_magazine">生成新刊</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- [优化版] 杂志生成配置 Modal -->
+<div id="magazineConfigModal" class="modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span><i class="fa-solid fa-sliders" style="margin-right:8px; color:var(--accent)"></i><span data-i18n="modals.mag_config_title">定制 AI 杂志新刊</span></span> 
+      <span onclick="closeModal('magazineConfigModal')" style="cursor:pointer; color:#999">&times;</span>
+    </div>
+    
+    <!-- 设置 1: 时间 -->
+    <div class="mag-config-group">
+      <div class="mag-config-label">
+        <i class="fa-regular fa-clock"></i>
+        <span data-i18n="modals.mag_config_range">收录范围</span>
+      </div>
+      <div class="mag-input-number">
+        <span style="font-size: 14px; color: #666;" data-i18n="modals.mag_config_hours_prefix">回顾过去</span>
+        <input type="number" id="magConfigHours" min="1" value="24">
+        <span style="font-size: 14px; color: #666;" data-i18n="modals.mag_config_hours_suffix">小时内的文章</span>
+      </div>
+    </div>
+
+    <!-- 设置 2: 来源 -->
+    <div class="mag-config-group" style="margin-bottom: 10px;">
+      <div class="mag-config-label">
+        <i class="fa-solid fa-layer-group"></i>
+        <span data-i18n="modals.mag_config_source_label">内容来源</span>
+      </div>
+      <div class="mag-config-bar">
+        <!-- 注意这里：动态文本交给 JS 处理 -->
+        <div class="mag-sel-info" id="magSelInfo"></div>
+        <div class="mag-sel-actions">
+          <a onclick="toggleMagSources(true)" data-i18n="modals.mag_config_select_all">全选</a>
+          <a onclick="toggleMagSources(false)" data-i18n="modals.mag_config_unselect_all">全不选</a>
+        </div>
+      </div>
+      <div id="magSourceList" class="source-select-container">
+        <!-- JS 动态渲染 -->
+      </div>
+    </div>
+
+    <!-- 底部操作 -->
+    <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px;">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('magazineConfigModal')" data-i18n="modals.btn_cancel">取消</button>
+      <button class="btn btn-primary" style="flex:2; background: linear-gradient(135deg, #ff6b35 0%, #ff8e64 100%);" onclick="startMagazineGeneration()">
+        <i class="fa-solid fa-wand-magic-sparkles" style="margin-right:6px"></i><span data-i18n="modals.mag_config_btn_start">开始印制新刊</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 生成进度 Modal (不可关闭) -->
+<div id="magazineProgressModal" class="modal" style="z-index: 2005;">
+  <div class="modal-box">
+    <div class="modal-header" style="color:var(--accent)">
+      <span data-i18n="modals.magazine_generating_title">正在印制杂志...</span>
+    </div>
+    <div style="text-align:center; margin-bottom: 20px;">
+      <i class="fa-solid fa-robot fa-bounce" style="font-size: 40px; color: var(--accent); margin: 20px 0;"></i>
+    </div>
+    <div id="magLog" style="height: 150px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 6px; font-size: 12px; font-family: monospace; border:1px solid #eee;">
+      Initializing...
+    </div>
+    <div id="magCurrentTask" style="margin-top:10px; font-weight:bold; font-size:13px; color:#333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+    
+    <!-- 实时预览流式文字 -->
+    <div id="magLiveStream" style="margin-top:10px; padding:10px; background:#f0f8ff; border-left:3px solid var(--accent); font-size:12px; height:60px; overflow:hidden; opacity:0.7;"></div>
+
+    <button id="btnStopMag" class="btn btn-ghost" style="margin-top:15px" onclick="stopMagazineGen()">Stop</button>
+  </div>
+</div>
+<script>
+/* ================== DB Helper (IndexedDB) ================== */
+const DB_NAME = 'RSS_Reader_DB';
+const DB_VERSION = 2; 
+const dbHelper = {
+  db: null,
+  async open() {
+    if (this.db) return this.db;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('feed_cache')) db.createObjectStore('feed_cache', { keyPath: 'url' });
+        if (!db.objectStoreNames.contains('article_meta')) db.createObjectStore('article_meta', { keyPath: 'id' });
+        // [新增] 杂志存储
+        if (!db.objectStoreNames.contains('magazines')) db.createObjectStore('magazines', { keyPath: 'id' });
+      };
+      req.onsuccess = (e) => { this.db = e.target.result; resolve(this.db); };
+      req.onerror = (e) => reject(e);
+    });
+  },
+  async get(storeName, key) {
+    const db = await this.open();
+    return new Promise((r, j) => {
+      const req = db.transaction(storeName, 'readonly').objectStore(storeName).get(key);
+      req.onsuccess = () => r(req.result);
+      req.onerror = () => j(req.error);
+    });
+  },
+  async put(storeName, val) {
+    const db = await this.open();
+    return new Promise((r, j) => {
+      const req = db.transaction(storeName, 'readwrite').objectStore(storeName).put(val);
+      req.onsuccess = () => r(req.result);
+      req.onerror = () => j(req.error);
+    });
+  },
+  async clear(storeName) {
+    const db = await this.open();
+    return new Promise((r, j) => {
+      const req = db.transaction(storeName, 'readwrite').objectStore(storeName).clear();
+      req.onsuccess = () => r();
+      req.onerror = () => j(req.error);
+    });
+  }
+};
+/* ================== 配置与状态 ================== */
+const CONFIG = { defaultHub: "", defaultCacheTime: 30, defaultLang: "zh" };
+let state = {
+  defaultFeeds: [], userFeeds: [], allFeeds: [],featuredRss: [],
+  settings: {
+    cacheTime: parseInt(localStorage.getItem('rss_cache_time')) || CONFIG.defaultCacheTime,
+    lang: localStorage.getItem('rss_lang') || navigator.language.split('-')[0] || CONFIG.defaultLang,
+    targetLang: localStorage.getItem('rss_target_lang') || "Simplified Chinese",
+    magazineHours: parseInt(localStorage.getItem('rss_mag_hours')) || 24
+  },
+  activeIdx: -1, articles: [], currentArticle: null, ws: null, i18nData: {},
+};
+if (!['zh', 'en'].includes(state.settings.lang)) state.settings.lang = 'zh';
+/* ================== 初始化 ================== */
+document.addEventListener('DOMContentLoaded', async () => {
+  initWS();
+  await initI18n();
+  updateUI();
+  document.getElementById('langSelect').value = state.settings.lang;
+  await initFeeds();
+  document.addEventListener('mouseup', handleSelect);
+  document.addEventListener('mousedown', e => {
+    if(!document.getElementById('selectionToolbar').contains(e.target)) 
+      document.getElementById('selectionToolbar').style.display='none';
+  });
+});
+/* ================== I18n Logic ================== */
+async function initI18n() {
+  try {
+    const res = await fetch('./i18n.json');
+    if (res.ok) state.i18nData = await res.json();
+    else state.i18nData = { zh: {}, en: {} };
+  } catch(e) {}
+}
+function t(key) {
+  const keys = key.split('.');
+  let obj = state.i18nData[state.settings.lang] || {};
+  for (let k of keys) { obj = obj[k]; if (!obj) return key; }
+  return obj;
+}
+function getTrTitle(titleField) {
+  if (typeof titleField === 'object' && titleField !== null) 
+    return titleField[state.settings.lang] || titleField['zh'] || titleField['en'] || "Unnamed";
+  return titleField; 
+}
+function updateUI() {
+  document.querySelectorAll('[data-i18n]').forEach(el => el.innerHTML = t(el.getAttribute('data-i18n')));
+  document.querySelectorAll('[data-tooltip]').forEach(el => {
+    el.setAttribute('data-tooltip-text', t(el.getAttribute('data-tooltip')));
+  });
+  const searchInput = document.getElementById('feedSearchInput');
+  if (searchInput) {
+    searchInput.placeholder = t('sidebar.search_placeholder');
+  }
+  if (state.activeIdx === -1) {
+    document.getElementById('currentFeedTitle').innerText = t('list.title_default');
+    document.getElementById('listContainer').innerText = t('list.select_tip');
+  } else {
+    document.getElementById('currentFeedTitle').innerText = getTrTitle(state.allFeeds[state.activeIdx].title);
+    const cacheBadge = document.getElementById('cacheIndicator');
+    // 如果没有正在加载，尝试格式化时间
+    if (cacheBadge.innerText && !cacheBadge.innerHTML.includes('fa-spinner')) {
+       cacheBadge.innerText = cacheBadge.innerText.includes(':') 
+        ? `${t('list.cache_time_prefix')} ${cacheBadge.innerText.split(' ').pop()}` 
+        : t('list.cache_latest');
+    }
+  }
+  if (state.currentArticle) updateTranslateBtnState(state.currentArticle.showingTranslation);
+  renderSidebar();
+}
+function changeLanguage(lang) {
+  state.settings.lang = lang;
+  localStorage.setItem('rss_lang', lang);
+  updateUI();
+  if(state.currentArticle) renderArticleBody(state.currentArticle);
+}
+/* ================== Feed & Cache ================== */
+async function initFeeds() {
+  const loadingEl = document.getElementById('loadingTips');
+  loadingEl.style.display = 'block';
+  try {
+    const res = await fetch('./default_feeds.json');
+    if (res.ok) { state.defaultFeeds = await res.json(); state.defaultFeeds.forEach(f => f.isDefault = true); }
+  } catch(e) {}
+  try {
+    const stored = localStorage.getItem('user_custom_feeds');
+    state.userFeeds = stored ? JSON.parse(stored) : [];
+  } catch(e) { state.userFeeds = []; }
+  updateAllFeeds();
+  loadingEl.style.display = 'none';
+  if(window.innerWidth > 768 && state.allFeeds.length) loadFeed(0);
+}
+function updateAllFeeds() {
+  state.allFeeds = [...state.defaultFeeds, ...state.userFeeds];
+  renderSidebar();
+}
+async function fetchRSS(feed, force) {
+  let url = feed.url;
+
+  const cacheKey = url;
+  const cached = await dbHelper.get('feed_cache', cacheKey);
+  const now = Date.now();
+  if (!force && cached && (now - cached.time < state.settings.cacheTime * 60000)) {
+    return { data: cached.data, fromCache: true, time: cached.time };
+  }
+  // 使用通用 extension_proxy 代理
+  const res = await fetch(`/extension_proxy?url=${encodeURIComponent(url)}`);
+  if(!res.ok) throw new Error(`${t('list.error_backend')} ${res.status}`);
+  const text = await res.text();
+  const xml = new DOMParser().parseFromString(text, "text/xml");
+  if(xml.querySelector("parsererror")) throw new Error(t('list.error_xml'));
+  let items = Array.from(xml.querySelectorAll("item"));
+  if(!items.length) items = Array.from(xml.querySelectorAll("entry"));
+  if(!items.length) throw new Error(t('list.error_empty'));
+  const parsedItems = items.map(item => {
+    const get = (t) => { const el = item.getElementsByTagName(t)[0]; return el ? el.textContent.trim() : ""; };
+    const getLink = () => { const el = item.getElementsByTagName("link")[0]; return el ? (el.getAttribute("href") || el.textContent.trim()) : ""; }
+    const desc = get("content:encoded") || get("description") || get("content") || get("summary");
+    return {
+      title: get("title"), link: getLink(), desc: desc,
+      date: (new Date(get("pubDate") || get("published") || "")).toLocaleString(),
+      image: (desc.match(/src="([^"]+)"/) || [])[1]
+    };
+  });
+  await dbHelper.put('feed_cache', { url: cacheKey, time: now, data: parsedItems });
+  return { data: parsedItems, fromCache: false, time: now };
+}
+/* ================== UI Render Functions ================== */
+function renderSidebar() {
+  const list = document.getElementById('feedList');
+  list.innerHTML = '';
+  state.allFeeds.forEach((f, i) => {
+    // ... 原有创建 div 的代码 ...
+    const div = document.createElement('div');
+    div.className = `feed-item ${i === state.activeIdx ? 'active' : ''}`;
+    let iconUrl = `https://s2.googleusercontent.com/s2/favicons?domain_url=${new URL(f.url).origin}`;
+    div.innerHTML = `<img class="feed-icon" src="${iconUrl}" onerror="this.style.opacity=0"><div class="feed-name">${getTrTitle(f.title)}</div>${f.isDefault ? '<i class="fa-solid fa-lock icon-locked"></i>' : `<button class="btn-delete" onclick="delFeed(${i}, event)">&times;</button>`}`;
+    div.onclick = () => loadFeed(i);
+    list.appendChild(div);
+  });
+
+  // [新增] 渲染完后，立即检查搜索框是否有内容，如果有，重新过滤一遍
+  const searchInput = document.getElementById('feedSearchInput');
+  if (searchInput && searchInput.value) {
+    filterFeeds(searchInput.value);
+  }
+}
+
+// 辅助函数：渲染文章列表到界面
+async function renderArticleList(items, time, isLoadingBackground = false) {
+  // 合并元数据 (AI总结、翻译等)
+  const merged = await Promise.all(items.map(async (art) => {
+       const meta = await dbHelper.get('article_meta', art.link);
+       if (meta) { art.aiSummary = meta.summary; art.aiTranslation = meta.translation; art.aiTitleTranslation = meta.titleTranslation; }
+       return art;
+  }));
+  state.articles = merged;
+
+  const container = document.getElementById('listContainer');
+  const cacheBadge = document.getElementById('cacheIndicator');
+  
+  // 更新右上角缓存状态
+  let timeStr = new Date(time).getHours() + ':' + new Date(time).getMinutes().toString().padStart(2,'0');
+  if (isLoadingBackground) {
+     cacheBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Updating...`;
+  } else {
+     cacheBadge.innerText = `${t('list.cache_time_prefix')} ${timeStr}`;
+  }
+
+  container.innerHTML = '';
+  state.articles.forEach((art, i) => {
+    const el = document.createElement('div');
+    el.className = `article-card ${art.image?'has-img':''}`;
+    el.innerHTML = `<div class="article-title">${art.title.replace(/</g,'&lt;')}</div><div class="article-meta">${art.date}</div>${art.image ? `<img src="${art.image}" class="article-img-preview" loading="lazy">` : ''}`;
+    el.onclick = () => showArt(i, el);
+    container.appendChild(el);
+  });
+}
+
+async function loadFeed(idx, force=false) {
+  navTo('list');
+  state.activeIdx = idx;
+  renderSidebar();
+  
+  const container = document.getElementById('listContainer');
+  const cacheBadge = document.getElementById('cacheIndicator');
+  const feed = state.allFeeds[idx];
+  
+  document.getElementById('currentFeedTitle').innerText = getTrTitle(feed.title);
+  
+  // 1. 构建 Cache Key
+  let url = feed.url;
+  if(feed.type === 'rsshub') url = url.startsWith('/') ? state.settings.hub.replace(/\/$/, '') + url : state.settings.hub.replace(/\/$/, '') + '/' + url;
+  const cacheKey = url;
+
+  // 2. 尝试从 DB 获取任何可用的缓存 (Stale-While-Revalidate)
+  const cached = await dbHelper.get('feed_cache', cacheKey);
+  let hasRenderedCache = false;
+
+  if (cached && cached.data && cached.data.length > 0) {
+    // 乐观渲染：先显示缓存内容
+    await renderArticleList(cached.data, cached.time, true); 
+    hasRenderedCache = true;
+  } else {
+    // 无缓存，显示 Loading
+    cacheBadge.innerText = "";
+    container.innerHTML = `<div class="spinner" style="margin-top:50px"></div><div style="margin-top:10px;color:#999;font-size:12px">${t('list.loading')}</div>`;
+  }
+
+  try {
+    // 3. 发起请求 (如果 force=true 或者缓存过期，fetchRSS 会发起网络请求)
+    // 注意：fetchRSS 内部有时间判断，但如果是 force=true 则会忽略时间
+    // 为了实现"点击列表不刷新，点击按钮才刷新"的逻辑：
+    // 如果是点击侧边栏(force=false)，且上面已经渲染了缓存，fetchRSS 可能会直接返回缓存 (fromCache: true)
+    // 如果是点击刷新按钮(force=true)，则 fetchRSS 会强制联网
+    
+    const result = await fetchRSS(feed, force);
+    
+    // 如果之前已经渲染了缓存，且 fetchRSS 返回的还是同一份缓存，则只更新 Badge 状态即可，无需重绘
+    if (hasRenderedCache && result.fromCache && result.time === cached.time && !force) {
+        // 仅仅是去掉了 Loading 状态
+        let timeStr = new Date(result.time).getHours() + ':' + new Date(result.time).getMinutes().toString().padStart(2,'0');
+        cacheBadge.innerText = `${t('list.cache_time_prefix')} ${timeStr}`;
+        return;
+    }
+    
+    // 如果有新数据（网络请求返回，或者 force 刷新），则重新渲染
+    await renderArticleList(result.data, result.time, false);
+    
+  } catch(e) {
+    if (hasRenderedCache) {
+       // 如果已有内容，只是后台刷新失败，则弹窗提示，不破坏当前界面
+       // 恢复 Badge 状态
+       let timeStr = new Date(cached.time).getHours() + ':' + new Date(cached.time).getMinutes().toString().padStart(2,'0');
+       cacheBadge.innerText = `${t('list.cache_time_prefix')} ${timeStr}`;
+       alert(`${t('list.error_backend')}: ${e.message}`);
+    } else {
+       // 无内容且失败
+       container.innerHTML = `<div style="padding:40px;color:#f55"><div>${e.message}</div><button class="btn btn-primary" style="margin-top:10px" onclick="loadFeed(${idx},true)">${t('list.retry')}</button></div>`;
+    }
+  }
+}
+
+function showArt(i, el) {
+  navTo('content');
+  document.querySelectorAll('.article-card').forEach(e=>e.classList.remove('active'));
+  if(el) el.classList.add('active');
+  state.currentArticle = state.articles[i];
+  renderArticleBody(state.currentArticle);
+}
+function updateTranslateBtnState(isTrans) {
+  const btn = document.getElementById('btnTranslateFull');
+  const span = btn.querySelector('span'); // 尝试寻找 span
+  
+  // 逻辑修改：只有当 span 存在时，才去修改文字
+  if (span) {
+    if (isTrans) {
+      span.innerText = t('content.toggle_original');
+    } else {
+      span.innerText = t('toolbar.translate_full');
+    }
+  }
+
+  // 按钮的激活状态（变色）依然需要执行
+  if (isTrans) { 
+    btn.classList.add('active'); 
+  } else { 
+    btn.classList.remove('active'); 
+  }
+}
+
+/* ================== Stream Core ================== */
+async function streamAIRequest(sys, user, onChunk, onFinish) {
+  try {
+    const res = await fetch('/simple_chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: "system", content: sys }, { role: "user", content: user }], stream: true })
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); 
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const content = JSON.parse(line).choices?.[0]?.delta?.content || "";
+          if (content) onChunk(content);
+        } catch (e) {}
+      }
+    }
+    if(onFinish) onFinish();
+  } catch (e) { console.error(e); alert(t('toolbar.translate_fail') + ": " + e.message); }
+}
+function cleanMarkdown(text) { 
+  if(!text) return "";
+  return text
+    .replace(/^```html\s*/i, '')
+    .replace(/```$/, '')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/\n/g, '<br>')
+    .trim(); 
+}
+/* ================== Action Logic ================== */
+function setToolbarBusy(isBusy) {
+  const btns = ['btnSummarize', 'btnTranslateFull', 'btnAskAI'];
+  btns.forEach(id => {
+    const btn = document.getElementById(id);
+    if(btn) btn.disabled = isBusy;
+  });
+}
+// ================== 修改：使用 markdown-it 渲染总结 ==================
+async function actionSummarize(btn) {
+  const art = state.currentArticle;
+  if (!art) return;
+  setToolbarBusy(true);
+  const summarySec = document.getElementById('aiSummarySection');
+  summarySec.style.display = 'block';
+  document.getElementById('aiSummaryContent').innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> ${t('content.generating')}`;
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = art.desc;
+  const rawText = tempDiv.innerText.replace(/\s+/g, '\n').slice(0, 10000);
+  let fullText = "";
+  const targetLang = state.settings.targetLang;
+  // 初始化 markdown-it 实例
+  const md = window.markdownit({
+      html: true,
+      linkify: true,
+      breaks: true
+  });
+  // 注册容器插件 (Tip, Warning, Danger)
+  if (typeof window.markdownitContainer !== 'undefined') {
+      const registerContainer = (name, title) => {
+          md.use(window.markdownitContainer, name, {
+              render: function (tokens, idx) {
+                  if (tokens[idx].nesting === 1) {
+                      return `<div class="admonition ${name}"><span class="admonition-title">${title}</span>`;
+                  } else {
+                      return '</div>\n';
+                  }
+              }
+          });
+      };
+      registerContainer('tip', '提示 / Tip');
+      registerContainer('warning', '注意 / Warning');
+      registerContainer('danger', '警告 / Danger');
+  }
+  await streamAIRequest(
+    `Summarize the following article in ${targetLang}. Output in Markdown format. Use lists for points. Use headings for structure.`, 
+    rawText, 
+    (chunk) => { 
+      fullText += chunk; 
+      // 使用 md.render 替代 cleanMarkdown
+      document.getElementById('aiSummaryContent').innerHTML = md.render(fullText); 
+    }, 
+    async () => { 
+      art.aiSummary = md.render(fullText); 
+      await saveArticleMeta(art); 
+      setToolbarBusy(false);
+    }
+  );
+}
+/* ================== 新增：流式结构化翻译核心逻辑 ================== */
+/**
+ * 处理整篇文章的翻译
+ * 策略：识别段落级别的元素，提取其中的文本节点，并行翻译后流式回填
+ */
+async function translateArticleContent(contentEl, targetLang) {
+  // 1. 获取所有可翻译的块级元素
+  // 选择器：p, h1-h6, li, blockquote, td, th
+  const selectors = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'td', 'th', 'div'];
+  const blocks = Array.from(contentEl.querySelectorAll(selectors.join(',')));
+  // 2. 过滤并准备翻译任务
+  const translationTasks = [];
+  const skipTags = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'NOSCRIPT', 'IFRAME', 'SVG'];
+  blocks.forEach((block) => {
+    // 检查是否在不可翻译的容器内
+    if (block.closest('code, pre, noscript, script')) return;
+    if (skipTags.includes(block.tagName)) return;
+    // 获取块内所有文本节点
+    const textNodes = [];
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while (node = walker.nextNode()) {
+      const text = node.textContent.trim();
+      if (text.length > 0) {
+        textNodes.push(node);
+      }
+    }
+    if (textNodes.length > 0) {
+      // 将所有文本节点内容拼接
+      const originalText = textNodes.map(n => n.textContent).join(' ').trim();
+      if (originalText.length < 2) return; // 太短不翻译
+      translationTasks.push({
+        blockElement: block,
+        textNodes: textNodes,
+        originalText: originalText
+      });
+    }
+  });
+  console.log(`Found ${translationTasks.length} translatable blocks.`);
+  // 3. 并行发起翻译任务 (使用 Promise.all)
+  await Promise.all(translationTasks.map(task => translateBlock(task, targetLang)));
+}
+/**
+ * 翻译单个块元素 (优化抖动版本)
+ */
+async function translateBlock(task, targetLang) {
+  const { blockElement, textNodes, originalText } = task;
+  // 标记状态
+  blockElement.setAttribute('data-translating', 'true');
+  let currentTranslation = "";
+  const firstTextNode = textNodes[0];
+  let rafId = null; // 用于 requestAnimationFrame 的 ID
+  let isFirstChunk = true; // 标记是否是第一段流
+  // 为了保持结构（如图片），我们将翻译结果流式填充到第一个文本节点
+  // 策略：延迟清理后续文本节点，直到第一段翻译到来，防止高度瞬间坍缩
+  await streamAIRequest(
+    `Translate the following text to ${targetLang}. Return ONLY the translated text. Do not include any markdown or HTML tags. Keep it natural.`,
+    originalText,
+    (chunk) => {
+      currentTranslation += chunk;
+      // === 关键修复：使用 requestAnimationFrame 节流 DOM 更新 ===
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          // 第一次更新时，清理掉后续的原始文本节点，防止内容重复
+          if (isFirstChunk) {
+            for (let i = 1; i < textNodes.length; i++) {
+              textNodes[i].textContent = "";
+            }
+            isFirstChunk = false;
+          }
+          // 更新第一个节点的文本
+          firstTextNode.textContent = currentTranslation;
+          rafId = null; // 重置 ID，允许下一次请求
+        });
+      }
+    },
+    () => {
+      // 完成后
+      if (rafId) cancelAnimationFrame(rafId); // 取消可能存在的最后一帧请求
+      // 确保最后一次更新被应用
+      firstTextNode.textContent = currentTranslation;
+      for (let i = 1; i < textNodes.length; i++) textNodes[i].textContent = "";
+      blockElement.removeAttribute('data-translating');
+      blockElement.setAttribute('data-translated', 'true');
+      // 添加淡入动画类，稍后移除
+      blockElement.classList.add('trans-fade-in');
+      setTimeout(() => blockElement.classList.remove('trans-fade-in'), 500);
+    }
+  );
+}
+// ================== 修改：actionTranslateFull 函数 ==================
+async function actionTranslateFull(btn) {
+  const art = state.currentArticle;
+  if (!art) return;
+  // 如果已经在显示翻译，切回原文
+  if (art.showingTranslation) {
+    art.showingTranslation = false;
+    renderArticleBody(art);
+    return;
+  }
+  // 如果已经有缓存的翻译，直接显示
+  if (art.aiTranslation && art.aiTitleTranslation) {
+    art.showingTranslation = true;
+    renderArticleBody(art);
+    return;
+  }
+  setToolbarBusy(true);
+  updateTranslateBtnState(true);
+  const bodyEl = document.getElementById('articleBody');
+  const titleEl = document.getElementById('artTitle');
+  // 确保内容已渲染（渲染原文作为基础）
+  bodyEl.innerHTML = art.desc;
+  const targetLang = state.settings.targetLang;
+  // --- 1. 翻译标题 ---
+  let translatedTitle = "";
+  const originalTitle = art.title;
+  // 标题翻译指示器
+  titleEl.innerHTML = `<span style="display:flex; align-items:center; gap:6px">
+    <span style="color:#666; opacity:0.7">${originalTitle}</span>
+    <i class="fa-solid fa-circle-notch fa-spin" style="font-size:0.8em; color:var(--accent)"></i>
+  </span>`;
+  await streamAIRequest(
+    `Translate title to ${targetLang}. Return ONLY the translated text.`,
+    originalTitle,
+    (chunk) => {
+      translatedTitle += chunk;
+      // 标题流式显示：显示译文 + 原文(小字)
+      titleEl.innerHTML = `<span>${translatedTitle}</span>`;
+    },
+    () => {
+      art.aiTitleTranslation = translatedTitle.trim();
+      // 翻译完成后，也可以选择隐藏原文，或者保留在 title 属性中
+      titleEl.title = originalTitle; 
+    }
+  );
+  // --- 2. 翻译正文 (使用新的结构化流式翻译) ---
+  try {
+    // 这里会并行处理各个段落
+    await translateArticleContent(bodyEl, targetLang);
+    // 保存翻译后的完整 HTML
+    art.aiTranslation = bodyEl.innerHTML;
+    art.showingTranslation = true;
+    await saveArticleMeta(art);
+    console.log('Article translation completed and saved.');
+  } catch (error) {
+    console.error('Translation failed:', error);
+    alert('Translation process encountered an error. Please try again.');
+    // 恢复原状
+    bodyEl.innerHTML = art.desc;
+  }
+  setToolbarBusy(false);
+}
+async function saveArticleMeta(art) {
+  if (!art.link) return;
+  await dbHelper.put('article_meta', {
+    id: art.link,
+    summary: art.aiSummary || null,
+    translation: art.aiTranslation || null,
+    titleTranslation: art.aiTitleTranslation || null,
+    timestamp: Date.now()
+  });
+}
+async function actionTranslateSelection() {
+  const pop = document.getElementById('translatePopup');
+  const bar = document.getElementById('selectionToolbar');
+  pop.style.display = 'block'; pop.style.top = bar.style.top; pop.style.left = bar.style.left; bar.style.display = 'none';
+  const resEl = document.getElementById('translateResult');
+  resEl.innerHTML = '<div class="spinner"></div>';
+  let full = "", first = true;
+  await streamAIRequest(`Translate to ${state.settings.targetLang}.`, window.getSelection().toString().trim(), (c) => {
+    if(first){ resEl.innerHTML=""; first=false; } full+=c; resEl.innerText=full;
+  });
+}
+function actionAskAIFull(btn) {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return alert("WS Disconnected");
+  state.ws.send(JSON.stringify({ type: 'set_user_input', data: { text: `关于《${document.getElementById('artTitle').innerText}》:\n${document.getElementById('articleBody').innerText}` } }));
+  const icon = btn.querySelector('i'); const cls = icon.className; icon.className = 'fa-solid fa-check'; setTimeout(() => icon.className = cls, 1500);
+}
+function actionAskAI() {
+  state.ws.send(JSON.stringify({ type: 'set_user_input', data: { text: `关于《${document.getElementById('artTitle').innerText}》:\n${window.getSelection().toString()}` } }));
+  document.getElementById('selectionToolbar').style.display='none';
+}
+/* ================== Utils ================== */
+async function clearCache() {
+  if(confirm(t('alerts.cache_clear_confirm'))) {
+    await dbHelper.clear('feed_cache'); await dbHelper.clear('article_meta');
+    localStorage.removeItem('rss_cache_data'); alert(t('sidebar.cleared')); location.reload();
+  }
+}
+function addFeed() { 
+  let url = document.getElementById('feedInput').value.trim();
+  let name = document.getElementById('feedNameInput').value.trim();
+  
+  if(!url) return;
+  if (!url.startsWith('http')) {
+      url = 'https://' + url;
+  }
+
+  if(!name) name = new URL(url).hostname;
+  state.userFeeds.push({ title: name, url, type: 'url' });
+  
+  saveUserFeeds(); updateAllFeeds(); closeModal('addFeedModal'); loadFeed(state.allFeeds.length-1);
+}
+function delFeed(i, e) {
+  e.stopPropagation();
+  if (state.allFeeds[i].isDefault) return alert(t('alerts.default_locked'));
+  if(confirm(t('alerts.delete_confirm'))) { 
+    state.userFeeds.splice(i - state.defaultFeeds.length, 1);
+    saveUserFeeds(); updateAllFeeds(); 
+    if(state.activeIdx>=i) state.activeIdx=-1;
+    document.getElementById('listContainer').innerHTML = `<div style="padding:40px;color:#999">${t('list.select_tip')}</div>`;
+  }
+}
+function setHub(u) { document.getElementById('rsshubUrl').value = u; }
+function saveUserFeeds() { localStorage.setItem('user_custom_feeds', JSON.stringify(state.userFeeds)); }
+function saveSettings() {
+    state.settings.cacheTime = parseInt(document.getElementById('cacheDuration').value) || 30;
+    state.settings.targetLang = document.getElementById('targetLangSelect').value;
+    state.settings.magazineHours = parseInt(document.getElementById('magazineHours').value) || 24;
+    localStorage.setItem('rss_mag_hours', state.settings.magazineHours);
+    localStorage.setItem('rss_cache_time', state.settings.cacheTime);
+    localStorage.setItem('rss_target_lang', state.settings.targetLang);
+    closeModal('settingsModal');
+    if(state.activeIdx >=0) loadFeed(state.activeIdx);
+}
+function refreshFeed() { if(state.activeIdx>=0) loadFeed(state.activeIdx, true); }
+function toggleFullScreen() { !document.fullscreenElement ? document.documentElement.requestFullscreen() : document.exitFullscreen(); }
+function initWS() {
+  const p = location.protocol==='https:'?'wss:':'ws:';
+  state.ws = new WebSocket(`${p}//${location.host}/ws`);
+  state.ws.onclose = () => setTimeout(initWS, 3000);
+}
+function handleSelect() {
+  setTimeout(() => {
+    const t = window.getSelection().toString().trim();
+    const bar = document.getElementById('selectionToolbar');
+    if(t) {
+      const r = window.getSelection().getRangeAt(0).getBoundingClientRect();
+      bar.style.display = 'flex';
+      bar.style.top = (r.top - 45 < 0 ? r.bottom + 10 : r.top - 45) + 'px';
+      bar.style.left = Math.max(10, Math.min(window.innerWidth - 110, r.left + r.width/2 - 50)) + 'px';
+    } else bar.style.display = 'none';
+  }, 100);
+}
+function navTo(view) { document.body.setAttribute('data-view', view); }
+function openModal(id) { 
+  document.getElementById(id).classList.add('active'); 
+  if(id === 'settingsModal') { 
+    document.getElementById('rsshubUrl').value = state.settings.hub; 
+    document.getElementById('cacheDuration').value = state.settings.cacheTime; 
+    document.getElementById('targetLangSelect').value = state.settings.targetLang;
+    document.getElementById('magazineHours').value = state.settings.magazineHours; 
+  } 
+  if(id === 'addFeedModal') { 
+    document.getElementById('feedInput').value = ''; 
+    document.getElementById('feedNameInput').value = ''; 
+  }
+  if(id === 'exploreModal') {
+    // 默认打开时，如果还没加载 namespace，加载它们
+    if(state.namespaces.length === 0) loadNamespaces();
+    
+    // [新增] 重置右侧显示为提示信息
+    document.getElementById('routeList').innerHTML = `<div style="text-align:center; padding:50px; color:#999" data-i18n="explore.select_ns_tip">${t('explore.select_ns_tip')}</div>`;
+    
+    // [新增] 清除当前的选中状态
+    state.currentNs = null;
+    // 重新渲染侧边栏以移除高亮
+    renderNamespaces(document.getElementById('nsFilter').value);
+  }
+  if (id === 'rssSiteModal') {
+    document.getElementById('rssSiteSearch').placeholder = t('modals.site_search_placeholder');
+    if (state.featuredRss.length === 0) {
+      loadFeaturedRss();
+    } else {
+      // 如果已有数据，为了避免之前的搜索残留，可以重置并渲染
+      document.getElementById('rssSiteSearch').value = '';
+      renderRssSites(state.featuredRss);
+    }
+  }
+  if (id === 'magazineListModal') {
+    loadMagazineList();
+  }
+}
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+document.addEventListener('click', e => {
+  const l = e.target.closest('a');
+  if (l && l.href && l.href.startsWith('http')) l.target = '_blank';
+}, true);
+/* ================== View Mode Logic ================== */
+let currentViewMode = 'blog'; // 默认博客模式
+
+// 切换下拉菜单显示
+function toggleViewMenu() {
+  const menu = document.getElementById('viewMenu');
+  // 简单的显隐切换
+  if(menu.style.display === 'block') {
+    menu.style.display = 'none';
+  } else {
+    menu.style.display = 'block';
+    // 点击外部关闭
+    const closeListener = (e) => {
+      if(!e.target.closest('.view-switcher-group')) {
+        menu.style.display = 'none';
+        document.removeEventListener('click', closeListener);
+      }
+    };
+    // 延迟一点绑定，防止立即触发
+    setTimeout(() => document.addEventListener('click', closeListener), 0);
+  }
+}
+
+// 核心：改变视图模式
+function changeViewMode(mode) {
+  currentViewMode = mode;
+  const contentEl = document.getElementById('articleContent');
+  const btnIcon = document.querySelector('#btnViewSwitch i');
+  
+  // 1. 设置 CSS 类
+  if (mode === 'gallery') {
+    contentEl.classList.remove('view-blog');
+    contentEl.classList.add('view-gallery');
+    btnIcon.className = 'fa-solid fa-images'; // 图标变更为图片
+  } else {
+    contentEl.classList.remove('view-gallery');
+    contentEl.classList.add('view-blog');
+    btnIcon.className = 'fa-solid fa-newspaper'; // 图标变更为报纸/文章
+  }
+  
+  // 2. 更新下拉菜单选中状态
+  document.querySelectorAll('.dropdown-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(mode === 'blog' ? 'viewOptionBlog' : 'viewOptionGallery').classList.add('active');
+  
+  // 3. 记住用户偏好 (可选，这里仅针对单次会话或单篇文章)
+  // localStorage.setItem('rss_view_pref', mode); 
+}
+
+// 修改原有的 renderArticleBody 函数
+function renderArticleBody(art) {
+  document.getElementById('placeholder').style.display='none';
+  const contentEl = document.getElementById('articleContent');
+
+  // 1. 强制显示普通文章容器
+  contentEl.style.display = 'block';
+  
+  // 2. 关键修复：强制恢复头部显示
+  document.getElementById('articleHeader').style.display = 'block';
+  document.getElementById('aiSummarySection').style.display = 'none'; // 默认隐藏总结，下面有判断会开
+
+  // 3. 关键修复：移除杂志视图的专用类，防止样式污染
+  contentEl.classList.remove('view-magazine');
+  
+  // 4. 恢复之前的视图模式 (Blog 或 Gallery)
+  // 确保 currentViewMode 变量存在，如果不存在则默认为 'blog'
+  if (typeof currentViewMode === 'undefined') currentViewMode = 'blog';
+  changeViewMode(currentViewMode);
+  
+  document.getElementById('artDate').innerText = art.date;
+  document.getElementById('artLink').href = art.link;
+  const summarySec = document.getElementById('aiSummarySection');
+  const bodyEl = document.getElementById('articleBody');
+  const titleEl = document.getElementById('artTitle');
+
+  // AI 总结显示逻辑
+  if (art.aiSummary) { 
+    summarySec.style.display = 'block'; 
+    document.getElementById('aiSummaryContent').innerHTML = art.aiSummary; 
+  } else { 
+    summarySec.style.display = 'none'; 
+  }
+
+  // 渲染内容
+  let contentHtml = art.desc;
+  let titleText = art.title;
+  
+  if (art.showingTranslation && art.aiTranslation) {
+    contentHtml = art.aiTranslation;
+    titleText = art.aiTitleTranslation || art.title;
+    updateTranslateBtnState(true);
+  } else {
+    updateTranslateBtnState(false);
+  }
+
+  bodyEl.innerHTML = contentHtml;
+  titleEl.innerText = titleText;
+
+  // 滚动回顶部
+  document.getElementById('articleScrollArea').scrollTop = 0;
+}
+/* ================== OPML Import Logic (增强版) ================== */
+function handleOpmlImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // UI 反馈
+  const labelSpan = input.parentElement.querySelector('span');
+  const originalText = labelSpan.innerText;
+  labelSpan.innerText = t('modals.importing'); // "正在导入..."
+
+  const reader = new FileReader();
+  
+  // 1. 读取完成后的回调
+  reader.onload = async (e) => {
+    try {
+      let text = e.target.result;
+      const parser = new DOMParser();
+      
+      // --- 第一次尝试解析 ---
+      let doc = parser.parseFromString(text, "text/xml");
+      
+      // --- 如果失败，尝试自动修复 (针对 & 符号) ---
+      if (doc.querySelector('parsererror')) {
+        console.warn("第一次解析失败，尝试自动修复非法字符 (& -> &amp;)...");
+        // 正则：将所有后面不是实体字符的 & 替换为 &amp;
+        text = text.replace(/&(?!(amp|lt|gt|quot|apos);)/g, '&amp;');
+        doc = parser.parseFromString(text, "text/xml");
+      }
+
+      // --- 如果还是失败，抛出详细错误 ---
+      const errorNode = doc.querySelector('parsererror');
+      if (errorNode) {
+        throw new Error(errorNode.textContent || "XML format violation");
+      }
+
+      // --- 解析成功，开始提取数据 ---
+      // 查找所有 xmlUrl 属性 (兼容 rss, outline 等标签)
+      const outlines = doc.querySelectorAll('[xmlUrl]');
+      let count = 0;
+
+      outlines.forEach(node => {
+        const url = node.getAttribute('xmlUrl');
+        // 优先取 title，如果没有则取 text，最后取 'Untitled'
+        const title = node.getAttribute('title') || node.getAttribute('text') || 'Untitled';
+        
+        if (!url) return;
+
+        // 查重：检查是否已存在
+        const exists = state.allFeeds.some(f => f.url === url);
+        if (!exists) {
+          // 自动判断类型
+          state.userFeeds.push({
+            title: title,
+            url: url,
+            type: 'url' // 统一标记为 url
+          });
+          count++;
+        }
+      });
+
+      if (count > 0) {
+        saveUserFeeds();
+        updateAllFeeds();
+        // 提示成功
+        alert(t('modals.opml_success').replace('{n}', count));
+        closeModal('addFeedModal');
+        renderSidebar();
+        // 如果当前没有选中文章，加载新导入的第一个
+        if (state.activeIdx === -1) loadFeed(state.allFeeds.length - count);
+      } else {
+        alert("未发现有效的新订阅源 (No valid feeds found)");
+      }
+
+    } catch (err) {
+      console.error("OPML Import Error:", err);
+      // 弹窗显示具体的错误信息，方便调试
+      alert(`${t('modals.opml_error')}\n\n错误详情: ${err.message.slice(0, 100)}`);
+    } finally {
+      input.value = ''; // 清空，允许重复上传同一文件
+      labelSpan.innerText = originalText;
+    }
+  };
+  
+  // 2. 开始读取 (默认 UTF-8)
+  reader.readAsText(file);
+}
+// 放在 renderSidebar 函数附近
+function filterFeeds(text) {
+  const term = text.toLowerCase().trim();
+  const items = document.querySelectorAll('.feed-item');
+  
+  items.forEach(item => {
+    // 获取订阅源名称
+    const name = item.querySelector('.feed-name').innerText.toLowerCase();
+    // 如果包含关键词，显示；否则隐藏
+    if (name.includes(term)) {
+      item.style.display = 'flex';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+/* ================== RSS Site Explore Logic ================== */
+
+// 1. 加载数据
+async function loadFeaturedRss() {
+  const container = document.getElementById('rssSiteList');
+  try {
+    const res = await fetch('./featured_rss.json');
+    if (!res.ok) throw new Error("Failed to load list");
+    state.featuredRss = await res.json();
+    renderRssSites(state.featuredRss);
+  } catch (e) {
+    container.innerHTML = `<div style="text-align:center; padding:20px; color:#f55">Error: ${e.message}</div>`;
+  }
+}
+
+// 2. 渲染 RSS 站点卡片 (适配双语)
+function renderRssSites(list) {
+  const container = document.getElementById('rssSiteList');
+  container.innerHTML = '';
+  
+  if (list.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:20px; color:#999; grid-column:1/-1">No results found</div>`;
+    return;
+  }
+
+  const isZh = state.settings.lang === 'zh';
+
+  list.forEach(site => {
+    // === [修改] 智能获取描述文本 ===
+    // 逻辑：优先取当前语言 -> 其次取另一种语言 -> 再次取旧字段 -> 最后默认文本
+    const descText = (isZh ? site.description_zh : site.description_en) || 
+                     (isZh ? site.description_en : site.description_zh) || 
+                     site.description || 
+                     'No description available.';
+
+    const card = document.createElement('div');
+    card.className = 'rss-card';
+    const iconUrl = `https://s2.googleusercontent.com/s2/favicons?domain_url=${new URL(site.url).origin}`;
+    
+    card.innerHTML = `
+      <div class="rss-card-header">
+        <img src="${iconUrl}" style="width:16px;height:16px;border-radius:2px;" onerror="this.style.opacity=0">
+        <div class="rss-card-title" title="${site.name}">${site.name}</div>
+        ${site.category ? `<span class="rss-card-tag">${site.category}</span>` : ''}
+      </div>
+      <!-- 使用计算好的 descText -->
+      <div class="rss-card-desc" title="${descText}">${descText}</div>
+      <button class="rss-card-btn" onclick="selectRssSite('${site.url}', '${site.name}')">
+        <i class="fa-solid fa-plus"></i> ${t('modals.btn_use')}
+      </button>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// 3. 搜索过滤 (适配双语字段)
+function filterRssSites() {
+  const term = document.getElementById('rssSiteSearch').value.toLowerCase();
+  
+  const filtered = state.featuredRss.filter(site => {
+    // 辅助函数：安全转小写
+    const safeLower = (str) => (str || '').toLowerCase();
+
+    // === [修改] 同时检索中英文字段 ===
+    return safeLower(site.name).includes(term) || 
+           safeLower(site.description_zh).includes(term) || 
+           safeLower(site.description_en).includes(term) ||
+           safeLower(site.description).includes(term) || // 兼容旧字段
+           safeLower(site.category).includes(term);
+  });
+  
+  renderRssSites(filtered);
+}
+
+// 4. 选择站点 (复用“添加订阅”模态框)
+function selectRssSite(url, name) {
+  closeModal('rssSiteModal');
+  openModal('addFeedModal');
+  
+  document.getElementById('feedInput').value = url;
+  document.getElementById('feedNameInput').value = name;
+  document.getElementById('feedType').value = 'url'; // 这类通常是普通 URL
+  
+  // 视觉反馈
+  const input = document.getElementById('feedInput');
+  input.style.transition = 'background 0.2s';
+  input.style.background = '#e6fffa';
+  setTimeout(() => input.style.background = '#fafafa', 500);
+}
+/* ================== AI Magazine Logic ================== */
+// --- [新增] 打开配置窗口并渲染订阅源 ---
+function openMagConfig() {
+  closeModal('magazineListModal');
+  openModal('magazineConfigModal');
+  
+  // 执行一次全局 UI 翻译更新，确保 Modal 里的 data-i18n 生效
+  updateUI(); 
+
+  document.getElementById('magConfigHours').value = state.settings.magazineHours;
+  
+  const container = document.getElementById('magSourceList');
+  container.innerHTML = '';
+  
+  state.allFeeds.forEach((feed, index) => {
+    let iconUrl = feed.type === 'rsshub' ? './RSSHub_logo.png' : `https://s2.googleusercontent.com/s2/favicons?domain_url=${new URL(feed.url).origin}`;
+    
+    const label = document.createElement('label');
+    label.className = 'source-check-item';
+    label.innerHTML = `
+      <input type="checkbox" class="mag-source-cb" value="${index}" checked>
+      <img src="${iconUrl}" onerror="this.style.opacity=0">
+      <span class="source-name">${getTrTitle(feed.title)}</span>
+    `;
+    label.querySelector('input').addEventListener('change', updateMagSelCount);
+    container.appendChild(label);
+  });
+
+  // 初始化计数器显示
+  updateMagSelCount();
+}
+
+// --- [新增] 全选/反选与计数 ---
+function toggleMagSources(select) {
+  document.querySelectorAll('.mag-source-cb').forEach(cb => cb.checked = select);
+  updateMagSelCount();
+}
+
+function updateMagSelCount() {
+  const count = document.querySelectorAll('.mag-source-cb:checked').length;
+  // 使用 t() 函数获取翻译，并替换占位符 {n}
+  const translatedText = t('modals.mag_config_selected').replace('{n}', count);
+  document.getElementById('magSelInfo').innerHTML = translatedText;
+}
+
+// --- [修改] 开始生成流程 (核心修改) ---
+async function startMagazineGeneration() {
+  // 1. 获取选中的订阅源索引
+  const checkboxes = document.querySelectorAll('.mag-source-cb:checked');
+  if (checkboxes.length === 0) {
+    alert("请至少选择一个订阅源！");
+    return;
+  }
+  
+  // 2. 获取临时的时间设置 (不保存到全局，或者你可以选择保存)
+  const hours = parseInt(document.getElementById('magConfigHours').value) || 24;
+  
+  closeModal('magazineConfigModal');
+  openModal('magazineProgressModal');
+  document.getElementById('btnStopMag').innerText = "Stop";
+  
+  isGeneratingMag = true;
+  stopGenFlag = false;
+  
+  const logEl = document.getElementById('magLog');
+  const taskEl = document.getElementById('magCurrentTask');
+  const liveEl = document.getElementById('magLiveStream');
+  
+  const log = (msg) => { 
+    const div = document.createElement('div'); 
+    div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`; 
+    logEl.appendChild(div); 
+    logEl.scrollTop = logEl.scrollHeight; 
+  };
+  
+  logEl.innerHTML = ''; 
+  liveEl.innerHTML = '';
+  
+  try {
+    // A. 收集文章 (仅从选中的源)
+    log(t('modals.magazine_process_fetching'));
+    const cutoff = Date.now() - (hours * 60 * 60 * 1000);
+    let candidates = [];
+    
+    // 构建待扫描列表
+    const indices = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    // 遍历选中的订阅源
+    for (let i = 0; i < indices.length; i++) {
+      if (stopGenFlag) break;
+      const feedIdx = indices[i];
+      const feed = state.allFeeds[feedIdx]; // 获取真实的 feed 对象
+      
+      taskEl.innerText = `Fetching (${i+1}/${indices.length}): ${getTrTitle(feed.title)}`;
+      
+      try {
+        const res = await fetchRSS(feed, false); 
+        const freshItems = res.data.filter(item => new Date(item.date).getTime() > cutoff);
+        freshItems.forEach(item => item.sourceTitle = getTrTitle(feed.title));
+        candidates.push(...freshItems);
+        log(`- ${getTrTitle(feed.title)}: Found ${freshItems.length} new articles.`);
+      } catch (e) {
+        log(`x Failed to fetch ${getTrTitle(feed.title)}`);
+      }
+    }
+    
+    // ... 以下代码保持原样，直接复制原来的 startMagazineGeneration 函数中从 "if (stopGenFlag) throw new Error..." 开始的部分 ...
+    // 为了完整性，我在这里继续写完后续逻辑:
+    
+    if (stopGenFlag) throw new Error("Stopped by user.");
+    
+    // 去重
+    const uniqueMap = new Map();
+    candidates.forEach(item => uniqueMap.set(item.link, item));
+    candidates = Array.from(uniqueMap.values());
+    
+    // 排序
+    candidates.sort((a,b) => new Date(b.date) - new Date(a.date));
+    
+    if (candidates.length === 0) {
+      log("No articles found in this time range.");
+      document.getElementById('btnStopMag').innerText = "Close";
+      return;
+    }
+    
+    log(t('modals.magazine_process_analyzing') + ` Total: ${candidates.length}`);
+    
+    // B. 逐个总结
+    const summarizedArticles = [];
+    
+    for (let i = 0; i < candidates.length; i++) {
+      if (stopGenFlag) break;
+      const art = candidates[i];
+      taskEl.innerText = `${i+1}/${candidates.length}: ${art.title}`;
+      
+      let cachedMeta = await dbHelper.get('article_meta', art.link) || {};
+      let summaryText = "";
+      let titleTransText = ""; 
+
+      // 1. 标题翻译逻辑
+      if (cachedMeta.titleTranslation) {
+        titleTransText = cachedMeta.titleTranslation;
+        log(`> [Title] Loaded from cache`);
+      } else {
+        log(`> [Title] Translating...`);
+        liveEl.innerText = "Translating Title...";
+        await new Promise((resolve) => {
+          let buf = "";
+          streamAIRequest(
+            `Translate the title to ${state.settings.targetLang}. Return ONLY the translation.`,
+            art.title,
+            (c) => { buf += c; },
+            async () => {
+              titleTransText = buf.trim();
+              cachedMeta = await dbHelper.get('article_meta', art.link) || {};
+              cachedMeta.id = art.link;
+              cachedMeta.titleTranslation = titleTransText;
+              cachedMeta.timestamp = Date.now();
+              await dbHelper.put('article_meta', cachedMeta);
+              resolve();
+            }
+          ).catch(() => resolve());
+        });
+      }
+
+      // 2. 总结逻辑
+      if (cachedMeta.summary) {
+        log(`> [Summary] Loaded from cache`);
+        summaryText = cachedMeta.summary;
+      } else {
+        log(`${t('modals.magazine_process_article')} ${art.title.substr(0,15)}...`);
+        liveEl.innerText = "AI Summarizing...";
+        const tempDiv = document.createElement('div'); tempDiv.innerHTML = art.desc;
+        const rawText = tempDiv.innerText.replace(/\s+/g, ' ').slice(0, 3000);
+        
+        await new Promise((resolve) => {
+          let buffer = "";
+          streamAIRequest(
+            `Summarize in 3 bullet points in ${state.settings.targetLang}. Be concise.`,
+            rawText,
+            (chunk) => { if(stopGenFlag) return; buffer += chunk; liveEl.innerText = buffer; },
+            async () => {
+               const md = window.markdownit();
+               const htmlSummary = md.render(buffer);
+               cachedMeta = await dbHelper.get('article_meta', art.link) || {};
+               cachedMeta.id = art.link;
+               cachedMeta.summary = htmlSummary;
+               cachedMeta.timestamp = Date.now();
+               await dbHelper.put('article_meta', cachedMeta);
+               summaryText = htmlSummary;
+               resolve();
+            }
+          ).catch(() => resolve());
+        });
+      }
+      
+      summarizedArticles.push({
+        title: titleTransText || art.title,
+        originalTitle: art.title,
+        link: art.link,
+        date: art.date,
+        source: art.sourceTitle,
+        summary: summaryText,
+        image: art.image
+      });
+      
+      await new Promise(r => setTimeout(r, 500));
+    }
+ 
+    if (stopGenFlag) throw new Error("Stopped.");
+
+    // C. 保存和查看
+    const magId = Date.now();
+    const magazineData = {
+      id: magId,
+      title: `AI Digest #${new Date().toLocaleDateString()}`,
+      created: Date.now(),
+      articleCount: summarizedArticles.length,
+      articles: summarizedArticles
+    };
+    
+    await dbHelper.put('magazines', magazineData);
+    log(t('modals.magazine_process_done'));
+    taskEl.innerText = "Completed!";
+    document.getElementById('btnStopMag').innerText = "Close";
+    closeModal('magazineProgressModal');
+    viewMagazine(magId);
+
+  } catch(e) {
+    log(`Error: ${e.message}`);
+    document.getElementById('btnStopMag').innerText = "Close";
+  } finally {
+    isGeneratingMag = false;
+  }
+}
+
+
+let isGeneratingMag = false;
+let stopGenFlag = false;
+
+// 1. 加载历史杂志列表
+async function loadMagazineList() {
+  const container = document.getElementById('magazineContainer');
+  container.innerHTML = '<div class="spinner"></div>';
+  try {
+    const db = await dbHelper.open();
+    const tx = db.transaction('magazines', 'readonly');
+    const req = tx.objectStore('magazines').getAll();
+    req.onsuccess = () => {
+      const list = req.result.sort((a,b) => b.id - a.id); // 按时间倒序
+      if (list.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#999">${t('modals.magazine_empty')}</div>`;
+        return;
+      }
+      container.innerHTML = '';
+      list.forEach(mag => {
+        const div = document.createElement('div');
+        div.className = 'mag-item';
+        div.innerHTML = `
+          <div class="mag-info" onclick="viewMagazine(${mag.id})">
+             <h4>${mag.title}</h4>
+             <p>${new Date(mag.id).toLocaleString()} · ${mag.articleCount} Articles</p>
+          </div>
+          <div class="mag-actions">
+            <button class="btn-icon" onclick="deleteMagazine(${mag.id}, event)" style="color:#ff4d4f"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    };
+  } catch(e) { console.error(e); }
+}
+
+function stopMagazineGen() {
+  if (isGeneratingMag) {
+    stopGenFlag = true;
+    document.getElementById('magLog').innerHTML += `<div>!!! USER STOPPED !!!</div>`;
+  } else {
+    closeModal('magazineProgressModal');
+  }
+}
+
+// 3. 查看杂志 (渲染视图)
+async function viewMagazine(id) {
+  closeModal('magazineListModal');
+  navTo('content'); // 切到内容页
+  
+  const contentEl = document.getElementById('articleContent');
+  const scrollArea = document.getElementById('articleScrollArea');
+  const db = await dbHelper.open();
+  const tx = db.transaction('magazines', 'readonly');
+  const req = tx.objectStore('magazines').get(id);
+  
+  req.onsuccess = () => {
+    const mag = req.result;
+    if (!mag) return alert("Magazine not found");
+    
+    document.getElementById('placeholder').style.display = 'none';
+    contentEl.style.display = 'block';
+    
+    // 切换到特殊的杂志 CSS 模式
+    contentEl.className = ''; // 清除 blog/gallery
+    contentEl.classList.add('view-magazine');
+    
+    // 隐藏普通 Header，使用杂志封面
+    document.getElementById('articleHeader').style.display = 'none';
+    document.getElementById('aiSummarySection').style.display = 'none';
+    
+    // 构建 HTML
+    let tocHtml = `<div class="magazine-toc"><h3>${t('content.magazine_toc')}</h3>`;
+    let bodyHtml = `<div class="magazine-cover">
+      <div class="magazine-title">${t('content.magazine_cover_title')}</div>
+      <div class="magazine-date">${new Date(mag.created).toLocaleDateString()} · ${mag.articles.length} Stories</div>
+    </div>`;
+    
+    // 生成目录和正文
+    let articlesHtml = '';
+    mag.articles.forEach((art, idx) => {
+      const anchor = `mag-art-${idx}`;
+      tocHtml += `<a class="toc-link" style="cursor: pointer;" onclick="document.getElementById('${anchor}').scrollIntoView({behavior:'smooth'})">
+        ${idx+1}. ${art.title}
+      </a>`;
+      articlesHtml += `
+        <div id="${anchor}" class="mag-article">
+          <div class="mag-article-title"><a href="${art.link}" target="_blank" style="text-decoration:none; color:inherit">${art.title}</a></div>
+          ${(art.originalTitle && art.originalTitle !== art.title) ? 
+            `<div style="font-size:14px; color:#888; margin-bottom:5px;">${art.originalTitle}</div>` : ''}
+          <div class="mag-article-meta">
+            <span>${art.source}</span> · <span>${art.date}</span>
+             <a href="${art.link}" target="_blank" style="margin-left:10px; color:var(--accent)"><i class="fa-solid fa-external-link-alt"></i></a>
+          </div>
+          ${art.image ? `<img src="${art.image}" style="max-width:100%; border-radius:6px; margin-bottom:15px; max-height:300px; object-fit:cover;">` : ''}
+          <div class="mag-article-summary markdown-body">
+            ${art.summary || '<p style="color:#999;font-style:italic">No summary available.</p>'}
+          </div>
+        </div>
+      `;
+    });
+    
+    tocHtml += `</div>`;
+    
+    document.getElementById('articleBody').innerHTML = tocHtml + articlesHtml;
+    scrollArea.scrollTop = 0;
+  };
+}
+
+// 4. 删除杂志
+async function deleteMagazine(id, e) {
+  e.stopPropagation();
+  if(!confirm(t('alerts.delete_confirm'))) return;
+  const db = await dbHelper.open();
+  const tx = db.transaction('magazines', 'readwrite');
+  tx.objectStore('magazines').delete(id);
+  tx.oncomplete = () => loadMagazineList();
+}
+
+/* ================== End AI Magazine Logic ================== */
+
+/* ================== [新增] TTS 朗读功能逻辑 ================== */
+
+// 1. 文本清洗工具函数：移除图片、视频、链接、AI总结等
+function cleanTextForTTS(element, isMagazineMode = false) {
+  // 克隆节点以避免修改页面显示
+  const clone = element.cloneNode(true);
+
+  // 移除所有不需要的媒体标签
+  const mediaTags = ['img', 'video', 'audio', 'iframe', 'svg', 'canvas', 'noscript', 'script', 'style'];
+  mediaTags.forEach(tag => {
+    clone.querySelectorAll(tag).forEach(el => el.remove());
+  });
+
+  // 移除特定的 CSS 类（如代码块行号、隐藏元素等）
+  // 如果不是杂志模式，移除普通文章的 AI 总结区域
+  if (!isMagazineMode) {
+    clone.querySelectorAll('#aiSummarySection').forEach(el => el.remove());
+  }
+
+  // 移除所有链接的 href (防止读出 http://...)，保留文本
+  // 或者直接移除整个链接节点？根据需求是"移除网页链接"，通常指不要读出URL
+  // 这里我们保留链接的文本，但稍后会用正则再次清洗文本中的 URL
+  
+  let text = "";
+
+  if (isMagazineMode) {
+    // === 杂志模式特殊处理 ===
+    // 移除目录
+    clone.querySelectorAll('.magazine-toc').forEach(el => el.remove());
+    clone.querySelectorAll('.magazine-cover').forEach(el => el.remove());
+
+    // 只提取每一个文章块的 标题 和 总结
+    const articles = clone.querySelectorAll('.mag-article');
+    const parts = [];
+    
+    // 开场白
+    // parts.push(t('content.magazine_cover_title')); 
+
+    articles.forEach((art, idx) => {
+      const titleEl = art.querySelector('.mag-article-title');
+      const summaryEl = art.querySelector('.mag-article-summary');
+      
+      if (titleEl && summaryEl) {
+        // 第X篇：标题。内容...
+        parts.push(`${t('content.article_prefix') || 'Article'} ${idx + 1}.`);
+        parts.push(titleEl.innerText.trim());
+        parts.push(summaryEl.innerText.trim());
+      }
+    });
+    text = parts.join('\n\n');
+
+  } else {
+    // === 普通文章模式 ===
+    // 提取标题 (如果有 id="artTitle" 的话，通常传入的 element 是 body，标题单独传)
+    // 这里假设传入的是 body，我们手动拼接标题
+    const title = document.getElementById('artTitle') ? document.getElementById('artTitle').innerText : '';
+    const bodyText = clone.innerText;
+    text = title + "\n\n" + bodyText;
+  }
+
+  // === 通用文本清洗 ===
+  // 1. 移除 Markdown 图片标记 ![alt](url) 或 HTML <img>留下的痕迹
+  // 2. 移除所有 URL 链接文本 (http://xxx, https://xxx)
+  text = text.replace(/(https?:\/\/[^\s]+)/g, ''); 
+  
+  // 3. 移除多余的空行和空白
+  text = text.replace(/\n\s*\n/g, '\n').trim();
+
+  return text;
+}
+
+// 2. 选中朗读
+function actionReadSelection() {
+  const selection = window.getSelection().toString().trim();
+  if (!selection) return;
+
+  // 简单清洗选中后的文本中的 URL
+  const cleanText = selection.replace(/(https?:\/\/[^\s]+)/g, '');
+  
+  sendTextToTTS(cleanText);
+  
+  // 隐藏工具栏
+  document.getElementById('selectionToolbar').style.display = 'none';
+}
+
+// 3. 全文朗读
+function actionReadFull(btn) {
+  const contentEl = document.getElementById('articleContent');
+  const isMagazine = contentEl.classList.contains('view-magazine');
+  const icon = btn.querySelector('i');
+
+  // 如果正在朗读（这里做一个简单的状态切换，实际上后端才是播放器）
+  // 我们可以发送一个 stop 指令，或者再次点击视为重新开始
+  if (btn.classList.contains('reading')) {
+    // 发送停止指令
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ type: 'stop_read' }));
+    }
+    btn.classList.remove('reading');
+    btn.classList.remove('active');
+    icon.className = 'fa-solid fa-headphones';
+    return;
+  }
+
+  // 开始准备文本
+  let textToRead = "";
+  
+  if (isMagazine) {
+    // 杂志模式：传入整个 contentEl 进行解析
+    textToRead = cleanTextForTTS(document.getElementById('articleBody'), true);
+  } else {
+    // 普通模式：传入 articleBody
+    textToRead = cleanTextForTTS(document.getElementById('articleBody'), false);
+  }
+
+  if (!textToRead) {
+    alert("没有可朗读的内容");
+    return;
+  }
+
+  // 发送
+  sendTextToTTS(textToRead);
+
+  // UI 状态更新
+  btn.classList.add('reading');
+  btn.classList.add('active'); // 保持高亮
+  icon.className = 'fa-solid fa-stop'; // 变为停止图标
+  
+  // 简单的超时重置 UI (可选，防止一直显示停止状态)
+  // setTimeout(() => {
+  //   btn.classList.remove('reading');
+  //   btn.classList.remove('active');
+  //   icon.className = 'fa-solid fa-headphones';
+  // }, 5000); 
+}
+
+// 4. 发送 WebSocket 指令
+function sendTextToTTS(text) {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    alert("WebSocket 未连接，无法朗读");
+    return;
+  }
+  
+  state.ws.send(JSON.stringify({
+    type: 'start_read',
+    data: { text: text }
+  }));
+}
+</script>
+</body>
+</html>
